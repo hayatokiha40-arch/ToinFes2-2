@@ -117,8 +117,8 @@
         .status-preparing { background-color: #ffffff; color: #000000; }     /* 準備中 */
         .status-ready { background-color: #0033cc; color: #ffffff; }         /* 準備完了 */
         
-        /* 非常に注意を引きやすい超高速・非対称点滅アニメーション (明るい赤0.3s、暗い赤0.1s) */
-.status-emergency { 
+        /* 非常に注意を引きやすく、かつ目が疲れない「緩急パトランプ」アニメーション */
+        .status-emergency { 
             animation: urgent-blink 0.8s infinite steps(1); 
         }
         @keyframes urgent-blink {
@@ -151,7 +151,8 @@
         }
         .client-btn.btn-preparing { background-color: #222; border-color: #555; }
         .client-btn.btn-ready { background-color: #0044cc; border-color: #0066ff; }
-        .client-btn.btn-emergency { background-color: #cc0000; border-color: #ff3333; }
+        /* 非アクティブ時でも非常ボタンが目立つよう、枠線を鮮やかな明るい赤色（#ff1a1a）に修正 */
+        .client-btn.btn-emergency { background-color: #cc0000; border-color: #ff1a1a; }
         
         /* アクティブ（選択中）時のデザイン調整 */
         /* 【改善】「準備中」が選ばれた際は明るい白背景にし、文字を黒くして視認性を極限までUP */
@@ -196,7 +197,7 @@
         <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
     </div>
 
-    <!-- 来客通知用の帯（非全画面・通常時は高さ0） -->
+    <!-- 来客通知用の帯（非全画面・通常時は高さ0 / テキストを「来客」に変更） -->
     <div id="visitor-banner">来客</div>
 
     <div id="screen-admin" class="screen">
@@ -433,7 +434,7 @@
                 if (isFirstLoad) { isFirstLoad = false; return; }
                 const banner = document.getElementById('visitor-banner');
                 banner.classList.add('active'); // 帯を表示
-                setTimeout(() => banner.classList.remove('active'), 5000); // 5秒後に非表示
+                setTimeout(() => banner.classList.remove('active'), 10000); // 10秒後に非表示
             });
         }
 
