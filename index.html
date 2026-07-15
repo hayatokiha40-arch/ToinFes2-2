@@ -372,7 +372,7 @@
             let hasEmergency = false;
             for (let i = 1; i <= 6; i++) {
                 if (currentStatuses['場所'+i] === '準備中') hasPreparing = true;
-                if (currentStatuses['places/場所'+i] === '非常') hasEmergency = true;
+                if (currentStatuses['場所'+i] === '非常') hasEmergency = true;
             }
 
             let msg = "";
