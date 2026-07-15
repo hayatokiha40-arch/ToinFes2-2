@@ -384,7 +384,7 @@
             });
         }
 
-        // 【改善】受付リセット時は status は変更せず、resetEvent のみを送信する形へ変更
+        // 受付リセット時は status は変更せず、resetEvent のみを送信
         function triggerReset() {
             let hasPreparing = false;
             let hasEmergency = false;
@@ -406,7 +406,6 @@
             }
 
             if (!database) return;
-            // 受付側では resetEvent（タイムスタンプ）だけを飛ばします
             database.ref().update({
                 'resetEvent': firebase.database.ServerValue.TIMESTAMP
             });
@@ -416,6 +415,9 @@
         function setupClient() {
             if (!database) return;
             
+            // 役割を変更するたびに、来客イベントの初期読み込みフラグをリセット
+            isFirstLoad = true;
+
             // ステータス監視
             statusRef = database.ref(`places/${currentRole}/status`);
             statusRef.on('value', snapshot => {
@@ -439,17 +441,22 @@
                 }
             });
 
-            // 【改善】リセット（来客）イベント監視
+            // リセット（来客）イベント監視
             resetEventRef = database.ref('resetEvent');
             resetEventRef.on('value', snapshot => {
-                if (isFirstLoad) { isFirstLoad = false; return; }
-                const banner = document.getElementById('visitor-banner');
-                banner.classList.add('active'); // 帯を表示（即時）
+                // 初回読み込み時はスルーする
+                if (isFirstLoad) { 
+                    isFirstLoad = false; 
+                    return; 
+                }
                 
-                // 10秒後に帯を隠し、そのタイミングで自身のステータスを「準備中」に書き戻す
+                const banner = document.getElementById('visitor-banner');
+                banner.classList.add('active'); // 帯を表示
+                
+                // 10秒後に帯を隠し、そのタイミングでステータスを「準備中」に書き戻す
                 setTimeout(() => {
                     banner.classList.remove('active'); // 帯を隠す
-                    updateStatus('準備中'); // 消えたタイミングで「準備中」へ移行！
+                    updateStatus('準備中'); // 消えたタイミングで「準備中」へ移行
                 }, 10000); 
             });
         }
