@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文化祭準備状況管理システム</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- ヘッダー --- */
+        .app-header {
+            background-color: #1e1e1e;
+            padding: 15px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #2d2d2d;
+            height: 70px;
+        }
+        .role-display { font-size: 18px; font-weight: bold; }
+        .btn-change-role {
+            background-color: #444444; color: #fff; border: none;
+            padding: 8px 16px; font-size: 14px; border-radius: 6px; cursor: pointer;
+        }
+        .btn-change-role:hover { background-color: #666666; }
+
+        /* --- 画面コンテナ --- */
+        .screen {
+            display: none; flex: 1; width: 100%; height: calc(100vh - 70px);
+        }
+        .screen.active { display: flex; }
+
+        /* --- 1. セットアップ（役割選択）画面 --- */
+        #screen-setup {
+            flex-direction: column; justify-content: center; align-items: center;
+            background: #121212; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 100;
+        }
+        .setup-box {
+            background-color: #1e1e1e; padding: 50px; border-radius: 12px;
+            text-align: center; border: 2px solid #333; width: 90%; max-width: 500px;
+        }
+        .setup-title { font-size: 24px; margin-bottom: 30px; }
+        .custom-dropdown {
+            width: 100%; padding: 15px; font-size: 20px;
+            background-color: #2a2a2a; color: #fff; border: 2px solid #555;
+            border-radius: 8px; margin-bottom: 30px; cursor: pointer;
+        }
+        .btn-start {
+            width: 100%; background-color: #0066ff; color: #fff; border: none;
+            padding: 15px; font-size: 20px; font-weight: bold; border-radius: 8px; cursor: pointer;
+            margin-bottom: 15px;
+        }
+        .btn-start:hover { background-color: #0055cc; }
+        .btn-cancel {
+            width: 100%; background-color: #444; color: #fff; border: none;
+            padding: 15px; font-size: 18px; border-radius: 8px; cursor: pointer;
+            display: none; /* 初期は非表示 */
+        }
+        .btn-cancel:hover { background-color: #666; }
+
+        /* --- 2. 受付（監視）画面 --- */
+        #screen-admin { flex-direction: column; padding: 15px; }
+        .admin-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr); gap: 15px; flex: 1;
+        }
+        .status-cell {
+            border: 3px solid #333; border-radius: 10px; display: flex;
+            flex-direction: column; overflow: hidden; background-color: #1a1a1a;
+        }
+        .cell-header {
+            background-color: #000; padding: 8px 0; text-align: center;
+            font-size: 20px; font-weight: bold; border-bottom: 2px solid #333;
+        }
+        .cell-body {
+            flex: 1; display: flex; justify-content: center; align-items: center;
+            font-size: 40px; font-weight: bold;
+        }
+        .status-preparing { background-color: #ffffff; color: #000000; }
+        .status-ready { background-color: #0033cc; color: #ffffff; }
+        .status-emergency { background-color: #cc0000; color: #ffffff; animation: blink 1s infinite alternate; }
+        @keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.7; } }
+        
+        .btn-reset {
+            background-color: #00ff33; color: #000; border: none;
+            padding: 10px 40px; font-size: 20px; font-weight: bold; border-radius: 50px; cursor: pointer;
+        }
+
+        /* --- 3. 各場所操作画面 --- */
+        #screen-client { padding: 20px; gap: 20px; align-items: center; }
+        .client-btn {
+            flex: 1; height: 80%; border: 4px solid #444; border-radius: 15px;
+            font-size: 42px; font-weight: bold; cursor: pointer; display: flex;
+            justify-content: center; align-items: center; opacity: 0.3; transition: 0.2s;
+        }
+        .client-btn.btn-preparing { background-color: #222; border-color: #555; }
+        .client-btn.btn-ready { background-color: #0044cc; border-color: #0066ff; }
+        .client-btn.btn-emergency { background-color: #cc0000; border-color: #ff3333; }
+        .client-btn.active { opacity: 1; transform: scale(1.02); border-width: 6px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
+
+        /* --- 4. 来客オーバーレイ --- */
+        #overlay-visitor {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #0033cc; color: #fff; display: none;
+            justify-content: center; align-items: center; font-size: 120px;
+            font-weight: bold; letter-spacing: 10px; z-index: 9999;
+        }
+        #overlay-visitor.active { display: flex; }
+
+    </style>
+</head>
+<body>
+
+    <div id="screen-setup" class="screen active">
+        <div class="setup-box">
+            <h1 class="setup-title">端末の役割を設定してください</h1>
+            <select id="role-select" class="custom-dropdown">
+                <option value="">-- 選択してください --</option>
+                <option value="受付">受付 (一括監視)</option>
+                <option value="場所1">場所 1</option>
+                <option value="場所2">場所 2</option>
+                <option value="場所3">場所 3</option>
+                <option value="場所4">場所 4</option>
+                <option value="場所5">場所 5</option>
+                <option value="場所6">場所 6</option>
+            </select>
+            <button class="btn-start" onclick="startApp()">この役割で開始する</button>
+            <button id="btn-cancel-setup" class="btn-cancel" onclick="cancelSetup()">キャンセル</button>
+        </div>
+    </div>
+
+    <div class="app-header" id="app-header" style="display: none;">
+        <div>
+            <span style="color:#aaa; font-size:14px;">現在の役割: </span>
+            <span id="header-role-name" class="role-display">未設定</span>
+        </div>
+        <div id="header-action-space"></div>
+        <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
+    </div>
+
+    <div id="screen-admin" class="screen">
+        <div class="admin-grid">
+            <div class="status-cell" id="cell-場所1"><div class="cell-header">場所 1</div><div class="cell-body status-preparing" id="text-場所1">準備中</div></div>
+            <div class="status-cell" id="cell-場所2"><div class="cell-header">場所 2</div><div class="cell-body status-preparing" id="text-場所2">準備中</div></div>
+            <div class="status-cell" id="cell-場所3"><div class="cell-header">場所 3</div><div class="cell-body status-preparing" id="text-場所3">準備中</div></div>
+            <div class="status-cell" id="cell-場所4"><div class="cell-header">場所 4</div><div class="cell-body status-preparing" id="text-場所4">準備中</div></div>
+            <div class="status-cell" id="cell-場所5"><div class="cell-header">場所 5</div><div class="cell-body status-preparing" id="text-場所5">準備中</div></div>
+            <div class="status-cell" id="cell-場所6"><div class="cell-header">場所 6</div><div class="cell-body status-preparing" id="text-場所6">準備中</div></div>
+        </div>
+    </div>
+
+    <div id="screen-client" class="screen">
+        <div class="client-btn btn-preparing active" id="btn-status-preparing" onclick="updateStatus('準備中')">準備中</div>
+        <div class="client-btn btn-ready" id="btn-status-ready" onclick="updateStatus('準備完了')">準備完了</div>
+        <div class="client-btn btn-emergency" id="btn-status-emergency" onclick="updateStatus('非常')">非常</div>
+    </div>
+
+    <div id="overlay-visitor">来客</div>
+
+    <script>
+        // ==========================================
+        // 【重要】Firebase設定をここに貼り付けます
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBZB8je1MsKFzgEShCKIZk0xB3zHzMgDAE",
+            authDomain: "toin-fes-2-2.firebaseapp.com",
+            databaseURL: "https://toin-fes-2-2-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "toin-fes-2-2",
+            storageBucket: "toin-fes-2-2.firebasestorage.app",
+            messagingSenderId: "407209918308",
+            appId: "1:407209918308:web:5c2ce9b1a90a55a8b24471"
+            measurementId: "G-HSFCX7T9J2"
+        };
+
+        // Firebase初期化
+        let database;
+        if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+        } else {
+            console.warn("デモモードで動作中です。（Firebase未設定）");
+        }
+
+        // 変数管理
+        let currentRole = null;
+        let mySessionId = null;
+        let currentStatuses = {};
+        let isFirstLoad = true;
+        
+        let statusRef = null;
+        let sessionRef = null;
+        let resetEventRef = null;
+
+        // --- セットアップ（役割変更）処理 ---
+        function openSetup() {
+            document.getElementById('screen-setup').style.display = 'flex';
+            // もし既に役割が決まっている状態で開いたなら、キャンセルボタンを表示する
+            if (currentRole) {
+                document.getElementById('btn-cancel-setup').style.display = 'block';
+            } else {
+                document.getElementById('btn-cancel-setup').style.display = 'none';
+            }
+        }
+
+        function cancelSetup() {
+            // キャンセルボタンを押したら、セットアップ画面を閉じて元の状態に戻る
+            document.getElementById('screen-setup').style.display = 'none';
+        }
+
+        function startApp() {
+            const select = document.getElementById('role-select');
+            const selectedRole = select.value;
+            
+            if (!selectedRole) {
+                alert("役割を選択してください！");
+                return;
+            }
+
+            // Firebase設定がない場合のデモ動作
+            if (!database) {
+                currentRole = selectedRole;
+                proceedToMainScreen();
+                return;
+            }
+
+            const newSessionId = Math.random().toString(36).substring(2, 15);
+
+            if (selectedRole !== '受付') {
+                // 重複チェック
+                database.ref('places/' + selectedRole).once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (data && data.session && selectedRole !== currentRole) {
+                        const confirmMsg = `${selectedRole} はすでに他の端末で使用されている可能性があります。\n強制的にこの端末に切り替えますか？`;
+                        if (!confirm(confirmMsg)) return;
+                    }
+                    
+                    // 以前のリスナーを解除
+                    clearListeners();
+                    currentRole = selectedRole;
+                    mySessionId = newSessionId;
+                    
+                    database.ref('places/' + currentRole).update({
+                        session: mySessionId,
+                        status: '準備中'
+                    }).then(() => proceedToMainScreen());
+                });
+            } else {
+                clearListeners();
+                currentRole = selectedRole;
+                proceedToMainScreen();
+            }
+        }
+
+        function proceedToMainScreen() {
+            document.getElementById('screen-setup').style.display = 'none';
+            document.getElementById('app-header').style.display = 'flex';
+            document.getElementById('header-role-name').textContent = currentRole;
+            
+            document.querySelectorAll('.screen:not(#screen-setup)').forEach(s => s.classList.remove('active'));
+
+            if (currentRole === '受付') {
+                document.getElementById('screen-admin').classList.add('active');
+                document.getElementById('header-action-space').innerHTML = '<button class="btn-reset" onclick="triggerReset()">リセット</button>';
+                setupAdmin();
+            } else {
+                document.getElementById('screen-client').classList.add('active');
+                document.getElementById('header-action-space').innerHTML = '';
+                setupClient();
+            }
+        }
+
+        function clearListeners() {
+            if (statusRef) statusRef.off();
+            if (sessionRef) sessionRef.off();
+            if (resetEventRef) resetEventRef.off();
+        }
+
+        // --- 受付画面の処理 ---
+        function setupAdmin() {
+            if (!database) return;
+            statusRef = database.ref('places');
+            statusRef.on('value', snapshot => {
+                const data = snapshot.val() || {};
+                for (let i = 1; i <= 6; i++) {
+                    const pKey = '場所' + i;
+                    const status = (data[pKey] && data[pKey].status) ? data[pKey].status : '準備中';
+                    currentStatuses[pKey] = status;
+                    
+                    const cellBody = document.getElementById('text-' + pKey);
+                    if (cellBody) {
+                        cellBody.textContent = status;
+                        cellBody.className = 'cell-body';
+                        if (status === '準備中') cellBody.classList.add('status-preparing');
+                        else if (status === '準備完了') cellBody.classList.add('status-ready');
+                        else if (status === '非常') cellBody.classList.add('status-emergency');
+                    }
+                }
+            });
+        }
+
+        function triggerReset() {
+            let hasPreparing = false;
+            let hasEmergency = false;
+            for (let i = 1; i <= 6; i++) {
+                if (currentStatuses['場所'+i] === '準備中') hasPreparing = true;
+                if (currentStatuses['場所'+i] === '非常') hasEmergency = true;
+            }
+
+            let msg = "";
+            if (hasEmergency && hasPreparing) msg = "非常の場所があります。また、準備中の場所もあります。本当によろしいですか。";
+            else if (hasEmergency) msg = "非常の場所があります。本当によろしいですか。";
+            else if (hasPreparing) msg = "準備中の場所があります。本当によろしいですか。";
+
+            if (msg !== "") {
+                if (!confirm(msg)) return;
+                if (hasEmergency) {
+                    if (!confirm("【最終確認】本当によろしいですか？")) return;
+                }
+            }
+
+            if (!database) return;
+            const updates = {};
+            for (let i = 1; i <= 6; i++) updates[`places/場所${i}/status`] = '準備中';
+            updates['resetEvent'] = firebase.database.ServerValue.TIMESTAMP;
+            database.ref().update(updates);
+        }
+
+        // --- 各場所画面の処理 ---
+        function setupClient() {
+            if (!database) return;
+            
+            // ステータス監視
+            statusRef = database.ref(`places/${currentRole}/status`);
+            statusRef.on('value', snapshot => {
+                const status = snapshot.val() || '準備中';
+                document.querySelectorAll('.client-btn').forEach(b => b.classList.remove('active'));
+                if (status === '準備中') document.getElementById('btn-status-preparing').classList.add('active');
+                else if (status === '準備完了') document.getElementById('btn-status-ready').classList.add('active');
+                else if (status === '非常') document.getElementById('btn-status-emergency').classList.add('active');
+            });
+
+            // 乗っ取り監視
+            sessionRef = database.ref(`places/${currentRole}/session`);
+            sessionRef.on('value', snapshot => {
+                const sId = snapshot.val();
+                if (sId && sId !== mySessionId) {
+                    alert("別の端末がこの役割を選択したため、切断されました。");
+                    currentRole = null;
+                    document.getElementById('screen-client').classList.remove('active');
+                    document.getElementById('app-header').style.display = 'none';
+                    openSetup();
+                }
+            });
+
+            // リセット（来客）イベント監視
+            resetEventRef = database.ref('resetEvent');
+            resetEventRef.on('value', snapshot => {
+                if (isFirstLoad) { isFirstLoad = false; return; }
+                const overlay = document.getElementById('overlay-visitor');
+                overlay.classList.add('active');
+                setTimeout(() => overlay.classList.remove('active'), 5000);
+            });
+        }
+
+        function updateStatus(newStatus) {
+            if (!database) return;
+            database.ref(`places/${currentRole}`).update({ status: newStatus });
+        }
+    </script>
+</body>
+</html>
