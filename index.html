@@ -118,12 +118,12 @@
         .status-ready { background-color: #0033cc; color: #ffffff; }         /* 準備完了 */
         
         /* 非常に注意を引きやすい超高速・非対称点滅アニメーション (明るい赤0.3s、暗い赤0.1s) */
-        .status-emergency { 
-            animation: urgent-blink 0.4s infinite steps(1); 
+.status-emergency { 
+            animation: urgent-blink 0.8s infinite steps(1); 
         }
         @keyframes urgent-blink {
-            0%, 75% { background-color: #ff0000; color: #ffffff; } /* 0.3秒間、猛烈に明るい赤 */
-            75.1%, 100% { background-color: #440000; color: #888888; } /* 0.1秒間、ガクッと暗い赤 */
+            0%, 75% { background-color: #ff0000; color: #ffffff; } /* 0.6秒間、しっかり明るい赤（75%） */
+            75.1%, 100% { background-color: #330000; color: #666666; } /* 0.2秒間、一瞬だけ暗い赤（25%） */
         }
         
         .btn-reset {
@@ -197,7 +197,7 @@
     </div>
 
     <!-- 来客通知用の帯（非全画面・通常時は高さ0） -->
-    <div id="visitor-banner">🚨 らいきゃく（来客）がきています！ 🚨</div>
+    <div id="visitor-banner">来客</div>
 
     <div id="screen-admin" class="screen">
         <div class="admin-grid">
