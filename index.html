@@ -37,6 +37,28 @@
         }
         .btn-change-role:hover { background-color: #666666; }
 
+        /* --- 来客通知用の横帯（ヘッダーとボタンの隙間用） --- */
+        #visitor-banner {
+            width: 100%;
+            height: 0; /* 初期は非表示 */
+            background-color: #0033cc;
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            letter-spacing: 5px;
+            transition: height 0.2s ease, padding 0.2s ease;
+            overflow: hidden;
+            border-bottom: 2px solid #002288;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        #visitor-banner.active {
+            height: 55px; /* 表示時ににょきっと出現 */
+            padding: 5px 0;
+        }
+
         /* --- 画面コンテナ --- */
         .screen {
             display: none; flex: 1; width: 100%; height: calc(100vh - 70px);
@@ -67,7 +89,7 @@
         .btn-cancel {
             width: 100%; background-color: #444; color: #fff; border: none;
             padding: 15px; font-size: 18px; border-radius: 8px; cursor: pointer;
-            display: none; /* 初期は非表示 */
+            display: none;
         }
         .btn-cancel:hover { background-color: #666; }
 
@@ -89,10 +111,20 @@
             flex: 1; display: flex; justify-content: center; align-items: center;
             font-size: 40px; font-weight: bold;
         }
-        .status-preparing { background-color: #ffffff; color: #000000; }
-        .status-ready { background-color: #0033cc; color: #ffffff; }
-        .status-emergency { background-color: #cc0000; color: #ffffff; animation: blink 1s infinite alternate; }
-        @keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.7; } }
+        
+        /* 受付画面 各状態のデザイン */
+        .status-unconnected { background-color: #2a2a2a; color: #666666; } /* 未接続 */
+        .status-preparing { background-color: #ffffff; color: #000000; }     /* 準備中 */
+        .status-ready { background-color: #0033cc; color: #ffffff; }         /* 準備完了 */
+        
+        /* 非常に注意を引きやすい超高速・非対称点滅アニメーション (明るい赤0.3s、暗い赤0.1s) */
+        .status-emergency { 
+            animation: urgent-blink 0.4s infinite steps(1); 
+        }
+        @keyframes urgent-blink {
+            0%, 75% { background-color: #ff0000; color: #ffffff; } /* 0.3秒間、猛烈に明るい赤 */
+            75.1%, 100% { background-color: #440000; color: #888888; } /* 0.1秒間、ガクッと暗い赤 */
+        }
         
         .btn-reset {
             background-color: #00ff33; color: #000; border: none;
@@ -100,7 +132,18 @@
         }
 
         /* --- 3. 各場所操作画面 --- */
-        #screen-client { padding: 20px; gap: 20px; align-items: center; }
+        #screen-client { 
+            padding: 20px; 
+            gap: 20px; 
+            align-items: center; 
+            height: calc(100vh - 70px); /* 帯が縮んでいる際の基準 */
+            transition: height 0.2s ease;
+        }
+        /* 帯が出現した際に、ボタンがはみ出さないよう調整 */
+        #visitor-banner.active + #screen-client {
+            height: calc(100vh - 125px);
+        }
+        
         .client-btn {
             flex: 1; height: 80%; border: 4px solid #444; border-radius: 15px;
             font-size: 42px; font-weight: bold; cursor: pointer; display: flex;
@@ -109,16 +152,18 @@
         .client-btn.btn-preparing { background-color: #222; border-color: #555; }
         .client-btn.btn-ready { background-color: #0044cc; border-color: #0066ff; }
         .client-btn.btn-emergency { background-color: #cc0000; border-color: #ff3333; }
-        .client-btn.active { opacity: 1; transform: scale(1.02); border-width: 6px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
-
-        /* --- 4. 来客オーバーレイ --- */
-        #overlay-visitor {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: #0033cc; color: #fff; display: none;
-            justify-content: center; align-items: center; font-size: 120px;
-            font-weight: bold; letter-spacing: 10px; z-index: 9999;
+        
+        /* アクティブ（選択中）時のデザイン調整 */
+        /* 【改善】「準備中」が選ばれた際は明るい白背景にし、文字を黒くして視認性を極限までUP */
+        .client-btn.btn-preparing.active { 
+            opacity: 1; 
+            background-color: #ffffff !important; 
+            color: #000000 !important;
+            transform: scale(1.02); 
+            border: 6px solid #ffcc00; /* アクティブを目立たせる黄色枠 */
+            box-shadow: 0 0 25px rgba(255,255,255,0.4); 
         }
-        #overlay-visitor.active { display: flex; }
+        .client-btn.active { opacity: 1; transform: scale(1.02); border-width: 6px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
 
     </style>
 </head>
@@ -151,14 +196,17 @@
         <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
     </div>
 
+    <!-- 来客通知用の帯（非全画面・通常時は高さ0） -->
+    <div id="visitor-banner">🚨 らいきゃく（来客）がきています！ 🚨</div>
+
     <div id="screen-admin" class="screen">
         <div class="admin-grid">
-            <div class="status-cell" id="cell-場所1"><div class="cell-header">場所 1</div><div class="cell-body status-preparing" id="text-場所1">準備中</div></div>
-            <div class="status-cell" id="cell-場所2"><div class="cell-header">場所 2</div><div class="cell-body status-preparing" id="text-場所2">準備中</div></div>
-            <div class="status-cell" id="cell-場所3"><div class="cell-header">場所 3</div><div class="cell-body status-preparing" id="text-場所3">準備中</div></div>
-            <div class="status-cell" id="cell-場所4"><div class="cell-header">場所 4</div><div class="cell-body status-preparing" id="text-場所4">準備中</div></div>
-            <div class="status-cell" id="cell-場所5"><div class="cell-header">場所 5</div><div class="cell-body status-preparing" id="text-場所5">準備中</div></div>
-            <div class="status-cell" id="cell-場所6"><div class="cell-header">場所 6</div><div class="cell-body status-preparing" id="text-場所6">準備中</div></div>
+            <div class="status-cell" id="cell-場所1"><div class="cell-header">場所 1</div><div class="cell-body status-unconnected" id="text-場所1">未接続</div></div>
+            <div class="status-cell" id="cell-場所2"><div class="cell-header">場所 2</div><div class="cell-body status-unconnected" id="text-場所2">未接続</div></div>
+            <div class="status-cell" id="cell-場所3"><div class="cell-header">場所 3</div><div class="cell-body status-unconnected" id="text-場所3">未接続</div></div>
+            <div class="status-cell" id="cell-場所4"><div class="cell-header">場所 4</div><div class="cell-body status-unconnected" id="text-場所4">未接続</div></div>
+            <div class="status-cell" id="cell-場所5"><div class="cell-header">場所 5</div><div class="cell-body status-unconnected" id="text-場所5">未接続</div></div>
+            <div class="status-cell" id="cell-場所6"><div class="cell-header">場所 6</div><div class="cell-body status-unconnected" id="text-場所6">未接続</div></div>
         </div>
     </div>
 
@@ -167,8 +215,6 @@
         <div class="client-btn btn-ready" id="btn-status-ready" onclick="updateStatus('準備完了')">準備完了</div>
         <div class="client-btn btn-emergency" id="btn-status-emergency" onclick="updateStatus('非常')">非常</div>
     </div>
-
-    <div id="overlay-visitor">来客</div>
 
     <script>
         // ==========================================
@@ -182,7 +228,7 @@
             storageBucket: "toin-fes-2-2.firebasestorage.app",
             messagingSenderId: "407209918308",
             appId: "1:407209918308:web:5c2ce9b1a90a55a8b24471",
-            measurementId: "G-HSFCX7T9J2",
+            measurementId: "G-HSFCX7T9J2"
         };
 
         // Firebase初期化
@@ -207,7 +253,6 @@
         // --- セットアップ（役割変更）処理 ---
         function openSetup() {
             document.getElementById('screen-setup').style.display = 'flex';
-            // もし既に役割が決まっている状態で開いたなら、キャンセルボタンを表示する
             if (currentRole) {
                 document.getElementById('btn-cancel-setup').style.display = 'block';
             } else {
@@ -216,7 +261,6 @@
         }
 
         function cancelSetup() {
-            // キャンセルボタンを押したら、セットアップ画面を閉じて元の状態に戻る
             document.getElementById('screen-setup').style.display = 'none';
         }
 
@@ -229,7 +273,6 @@
                 return;
             }
 
-            // Firebase設定がない場合のデモ動作
             if (!database) {
                 currentRole = selectedRole;
                 proceedToMainScreen();
@@ -239,7 +282,7 @@
             const newSessionId = Math.random().toString(36).substring(2, 15);
 
             if (selectedRole !== '受付') {
-                // 重複チェック
+                // 重複・乗っ取りチェック
                 database.ref('places/' + selectedRole).once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data && data.session && selectedRole !== currentRole) {
@@ -247,15 +290,20 @@
                         if (!confirm(confirmMsg)) return;
                     }
                     
-                    // 以前のリスナーを解除
                     clearListeners();
                     currentRole = selectedRole;
                     mySessionId = newSessionId;
                     
+                    // 接続開始時にセッションとステータスを書き込む
                     database.ref('places/' + currentRole).update({
                         session: mySessionId,
                         status: '準備中'
-                    }).then(() => proceedToMainScreen());
+                    }).then(() => {
+                        // オフライン切断時のイベントを設定（これでアプリが閉じられたら自動的に未接続化する）
+                        database.ref('places/' + currentRole + '/session').onDisconnect().remove();
+                        database.ref('places/' + currentRole + '/status').onDisconnect().remove();
+                        proceedToMainScreen();
+                    });
                 });
             } else {
                 clearListeners();
@@ -296,16 +344,24 @@
                 const data = snapshot.val() || {};
                 for (let i = 1; i <= 6; i++) {
                     const pKey = '場所' + i;
-                    const status = (data[pKey] && data[pKey].status) ? data[pKey].status : '準備中';
+                    // セッションが空、またはステータスが存在しない場合は「未接続」にする
+                    const isConnected = data[pKey] && data[pKey].session;
+                    const status = isConnected ? data[pKey].status : '未接続';
                     currentStatuses[pKey] = status;
                     
                     const cellBody = document.getElementById('text-' + pKey);
                     if (cellBody) {
                         cellBody.textContent = status;
                         cellBody.className = 'cell-body';
-                        if (status === '準備中') cellBody.classList.add('status-preparing');
-                        else if (status === '準備完了') cellBody.classList.add('status-ready');
-                        else if (status === '非常') cellBody.classList.add('status-emergency');
+                        if (status === '未接続') {
+                            cellBody.classList.add('status-unconnected');
+                        } else if (status === '準備中') {
+                            cellBody.classList.add('status-preparing');
+                        } else if (status === '準備完了') {
+                            cellBody.classList.add('status-ready');
+                        } else if (status === '非常') {
+                            cellBody.classList.add('status-emergency');
+                        }
                     }
                 }
             });
@@ -316,7 +372,7 @@
             let hasEmergency = false;
             for (let i = 1; i <= 6; i++) {
                 if (currentStatuses['場所'+i] === '準備中') hasPreparing = true;
-                if (currentStatuses['場所'+i] === '非常') hasEmergency = true;
+                if (currentStatuses['places/場所'+i] === '非常') hasEmergency = true;
             }
 
             let msg = "";
@@ -333,7 +389,13 @@
 
             if (!database) return;
             const updates = {};
-            for (let i = 1; i <= 6; i++) updates[`places/場所${i}/status`] = '準備中';
+            // 接続中の端末だけを「準備中」に戻し、未接続端末は未接続のままにする
+            for (let i = 1; i <= 6; i++) {
+                const pKey = '場所' + i;
+                if (currentStatuses[pKey] !== '未接続') {
+                    updates[`places/${pKey}/status`] = '準備中';
+                }
+            }
             updates['resetEvent'] = firebase.database.ServerValue.TIMESTAMP;
             database.ref().update(updates);
         }
@@ -369,9 +431,9 @@
             resetEventRef = database.ref('resetEvent');
             resetEventRef.on('value', snapshot => {
                 if (isFirstLoad) { isFirstLoad = false; return; }
-                const overlay = document.getElementById('overlay-visitor');
-                overlay.classList.add('active');
-                setTimeout(() => overlay.classList.remove('active'), 5000);
+                const banner = document.getElementById('visitor-banner');
+                banner.classList.add('active'); // 帯を表示
+                setTimeout(() => banner.classList.remove('active'), 5000); // 5秒後に非表示
             });
         }
 
