@@ -151,8 +151,14 @@
         }
         .client-btn.btn-preparing { background-color: #222; border-color: #555; }
         .client-btn.btn-ready { background-color: #0044cc; border-color: #0066ff; }
-        /* 非アクティブ時でも非常ボタンが目立つよう、枠線を鮮やかな明るい赤色（#ff1a1a）に修正 */
-        .client-btn.btn-emergency { background-color: #cc0000; border-color: #ff1a1a; }
+        
+        /* 【改善】「非常」ボタンは非アクティブでも絶対に暗闇に埋もれないよう、特別に明るく（opacity: 0.7）設定 */
+        .client-btn.btn-emergency { 
+            background-color: #550000; 
+            border-color: #ff0000; 
+            color: #ffb3b3; 
+            opacity: 0.7; 
+        }
         
         /* アクティブ（選択中）時のデザイン調整 */
         /* 【改善】「準備中」が選ばれた際は明るい白背景にし、文字を黒くして視認性を極限までUP */
@@ -164,6 +170,16 @@
             border: 6px solid #ffcc00; /* アクティブを目立たせる黄色枠 */
             box-shadow: 0 0 25px rgba(255,255,255,0.4); 
         }
+        
+        /* 【改善】「非常」ボタンがアクティブになったときは、さらに強烈なフルパワー赤（不透明度1.0 & 白文字）へ */
+        .client-btn.btn-emergency.active {
+            opacity: 1;
+            background-color: #ff0000 !important;
+            border-color: #ffffff !important;
+            color: #ffffff !important;
+            box-shadow: 0 0 30px rgba(255,0,0,0.8);
+        }
+        
         .client-btn.active { opacity: 1; transform: scale(1.02); border-width: 6px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
 
     </style>
@@ -368,6 +384,7 @@
             });
         }
 
+        // 【改善】受付リセット時は status は変更せず、resetEvent のみを送信する形へ変更
         function triggerReset() {
             let hasPreparing = false;
             let hasEmergency = false;
@@ -389,16 +406,10 @@
             }
 
             if (!database) return;
-            const updates = {};
-            // 接続中の端末だけを「準備中」に戻し、未接続端末は未接続のままにする
-            for (let i = 1; i <= 6; i++) {
-                const pKey = '場所' + i;
-                if (currentStatuses[pKey] !== '未接続') {
-                    updates[`places/${pKey}/status`] = '準備中';
-                }
-            }
-            updates['resetEvent'] = firebase.database.ServerValue.TIMESTAMP;
-            database.ref().update(updates);
+            // 受付側では resetEvent（タイムスタンプ）だけを飛ばします
+            database.ref().update({
+                'resetEvent': firebase.database.ServerValue.TIMESTAMP
+            });
         }
 
         // --- 各場所画面の処理 ---
@@ -428,13 +439,18 @@
                 }
             });
 
-            // リセット（来客）イベント監視
+            // 【改善】リセット（来客）イベント監視
             resetEventRef = database.ref('resetEvent');
             resetEventRef.on('value', snapshot => {
                 if (isFirstLoad) { isFirstLoad = false; return; }
                 const banner = document.getElementById('visitor-banner');
-                banner.classList.add('active'); // 帯を表示
-                setTimeout(() => banner.classList.remove('active'), 10000); // 10秒後に非表示
+                banner.classList.add('active'); // 帯を表示（即時）
+                
+                // 10秒後に帯を隠し、そのタイミングで自身のステータスを「準備中」に書き戻す
+                setTimeout(() => {
+                    banner.classList.remove('active'); // 帯を隠す
+                    updateStatus('準備中'); // 消えたタイミングで「準備中」へ移行！
+                }, 10000); 
             });
         }
 
