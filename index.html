@@ -186,7 +186,7 @@
         .box-light-on { background-color: #ffffff; border: 2px solid #ffffff; height: 40px; width: 100%; display: block; }
         .box-light-off { background-color: #121212; border: 2px solid #444; height: 40px; width: 100%; display: block; }
 
-        /* 管理者画面用 ステータスバッジ（追加分） */
+        /* 管理者画面用 ステータスバッジ */
         .mgr-badge { display: inline-block; padding: 8px 20px; border-radius: 6px; font-weight: bold; width: 80%; }
         .mgr-badge-preparing { background-color: #ffffff; color: #000000; }
         .mgr-badge-ready { background-color: #0033cc; color: #ffffff; }
@@ -285,7 +285,7 @@
 
         // 管理者パスワード設定 ( SHA-256ハッシュ値 )
         // 初期パスワード: "toin136"
-        const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
+        const MANAGER_PASSWORD_HASH = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
 
         // パスワード照合用のハッシュ化関数
         async function sha256(plainText) {
@@ -296,17 +296,25 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // Firebase初期化
+        // Firebase初期化 & サーバー時刻同期設定
         let database;
+        let serverTimeOffset = 0; // サーバー時刻との誤差(ms)
+
         if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
             firebase.initializeApp(firebaseConfig);
             database = firebase.database();
+
+            // Firebaseサーバー時刻とのオフセットを定期的に同期
+            database.ref('.info/serverTimeOffset').on('value', snap => {
+                serverTimeOffset = snap.val() || 0;
+            });
         }
 
         let currentRole = null;
         let mySessionId = null;
         let allPlacesData = {};
         let isFirstLoad = true;
+        let heartbeatInterval = null;
 
         let statusRef = null;
         let sessionRef = null;
@@ -361,7 +369,10 @@
                     currentRole = selectedRole;
                     mySessionId = newSessionId;
                     
-                    let initData = { session: mySessionId };
+                    let initData = { 
+                        session: mySessionId,
+                        lastSeen: firebase.database.ServerValue.TIMESTAMP
+                    };
                     // ステータスを持つ役割のみ初期化
                     if (['スタート', '場所1', '場所2', '場所3', '場所4'].includes(currentRole)) {
                         initData.status = '準備中';
@@ -390,6 +401,9 @@
             const headerSpace = document.getElementById('header-action-space');
             headerSpace.innerHTML = '';
 
+            // ハートビート送信を開始（2秒周期）
+            startHeartbeat();
+
             if (currentRole === '受付') {
                 document.getElementById('screen-admin').classList.add('active');
                 headerSpace.innerHTML = '<button class="btn-action-header" onclick="triggerGuide()">案内</button>';
@@ -415,9 +429,43 @@
         }
 
         function clearListeners() {
+            stopHeartbeat();
             if (statusRef) statusRef.off();
             if (sessionRef) sessionRef.off();
             if (eventRef) eventRef.off();
+        }
+
+        // --- ハートビート（生存信号）送信処理 ---
+        function startHeartbeat() {
+            stopHeartbeat();
+            if (!database || !currentRole) return;
+
+            // 即時1回送信
+            sendHeartbeat();
+            // 2秒（2000ms）周期で更新
+            heartbeatInterval = setInterval(sendHeartbeat, 2000);
+        }
+
+        function sendHeartbeat() {
+            if (!database || !currentRole) return;
+            database.ref(`places/${currentRole}`).update({
+                lastSeen: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        // --- 5秒タイムアウト判定関数 ---
+        function isDeviceConnected(placeData) {
+            if (!placeData || !placeData.session || !placeData.lastSeen) return false;
+            const estimatedServerNow = Date.now() + serverTimeOffset;
+            const diff = estimatedServerNow - placeData.lastSeen;
+            return diff < 5000; // 5秒未満なら「接続中」
         }
 
         // --- 受付・スタート用のグリッド動的作成 ---
@@ -447,7 +495,7 @@
             });
         }
 
-        // 管理者表用 ステータスバッジ生成関数（追加分）
+        // 管理者表用 ステータスバッジ生成関数
         function getManagerStatusBadge(status) {
             if (status === '準備中') return '<span class="mgr-badge mgr-badge-preparing">準備中</span>';
             if (status === '準備完了') return '<span class="mgr-badge mgr-badge-ready">準備完了</span>';
@@ -464,11 +512,11 @@
                 const places = val.places || {};
                 allPlacesData = places;
 
-                // 1. 受付/スタート画面のグリッド更新
+                // 1. 受付/スタート画面のグリッド更新（5秒タイムアウト判定適用）
                 ['スタート', '場所1', '場所2', '場所3', '場所4'].forEach(key => {
                     const cellBody = document.getElementById('text-' + key);
                     if (cellBody) {
-                        const isConnected = places[key] && places[key].session;
+                        const isConnected = isDeviceConnected(places[key]);
                         const status = isConnected ? places[key].status : '未接続';
                         cellBody.textContent = status;
                         cellBody.className = 'cell-body';
@@ -479,10 +527,9 @@
                     }
                 });
 
-                // 2. 管理者画面の更新
+                // 2. 管理者画面の更新（5秒タイムアウト判定適用）
                 if (currentRole === '管理者') {
                     // 受付
-                    const guideActive = val.guideEvent && (Date.now() - val.guideEvent < 300000);
                     const mgrGuide = document.getElementById('mgr-受付');
                     mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
 
@@ -491,13 +538,15 @@
                     if (val.startState === 'active') {
                         mgrStart.innerHTML = '<span class="badge-blue">スタート</span>';
                     } else {
-                        const st = (places['スタート'] && places['スタート'].session) ? places['スタート'].status : '未接続';
+                        const isConnected = isDeviceConnected(places['スタート']);
+                        const st = isConnected ? places['スタート'].status : '未接続';
                         mgrStart.innerHTML = getManagerStatusBadge(st);
                     }
 
                     // 場所1〜4
                     ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
-                        const st = (places[p] && places[p].session) ? places[p].status : '未接続';
+                        const isConnected = isDeviceConnected(places[p]);
+                        const st = isConnected ? places[p].status : '未接続';
                         document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
                     });
 
@@ -519,7 +568,7 @@
             let readyCount = 0;
 
             targetPlaces.forEach(p => {
-                if (places[p] && places[p].session) {
+                if (isDeviceConnected(places[p])) {
                     connectedCount++;
                     if (places[p].status === '準備完了') readyCount++;
                 }
@@ -531,7 +580,7 @@
         // --- 受付：「案内」ボタン ---
         function triggerGuide() {
             const startData = allPlacesData['スタート'];
-            const startStatus = (startData && startData.session) ? startData.status : '未接続';
+            const startStatus = isDeviceConnected(startData) ? startData.status : '未接続';
 
             if (startStatus === '準備中') {
                 if (!confirm("スタート地点が準備中です。よろしいですか。")) return;
@@ -553,7 +602,7 @@
             let hasEmergency = false;
 
             ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
-                if (allPlacesData[p] && allPlacesData[p].session) {
+                if (isDeviceConnected(allPlacesData[p])) {
                     if (allPlacesData[p].status === '準備中') hasPreparing = true;
                     if (allPlacesData[p].status === '非常') hasEmergency = true;
                 }
@@ -596,6 +645,7 @@
                 if (sId && sId !== mySessionId) {
                     alert("別の端末がこの役割を選択したため、切断されました。");
                     currentRole = null;
+                    stopHeartbeat();
                     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
                     document.getElementById('app-header').style.display = 'none';
                     openSetup();
