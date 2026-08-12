@@ -199,12 +199,21 @@
             width: 100%; max-width: 800px; border-collapse: collapse; margin-top: 20px;
         }
         .manager-table th, .manager-table td {
-            border: 2px solid #444; padding: 15px; text-align: center; font-size: 22px; font-weight: bold;
+            border: 2px solid #444; padding: 12px; text-align: center; font-size: 22px; font-weight: bold;
         }
         .manager-table th { background-color: #222; width: 40%; }
         .manager-table td { background-color: #1a1a1a; }
         
-        .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
+        /* 管理者画面用のステータスバッジ */
+        .mgr-badge {
+            display: inline-block; padding: 8px 24px; border-radius: 8px; font-weight: bold; width: 80%;
+        }
+        .mgr-badge-preparing { background-color: #ffffff; color: #000000; }
+        .mgr-badge-ready { background-color: #0033cc; color: #ffffff; }
+        .mgr-badge-emergency { background-color: #ff0000; color: #ffffff; }
+        .mgr-badge-unconnected { background-color: #2a2a2a; color: #666666; }
+        
+        .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 24px; border-radius: 8px; display: inline-block; width: 80%; }
         .box-light-on { background-color: #ffffff; border: 2px solid #ffffff; height: 40px; width: 100%; display: block; }
         .box-light-off { background-color: #121212; border: 2px solid #444; height: 40px; width: 100%; display: block; }
 
@@ -493,6 +502,14 @@
             });
         }
 
+        // 管理者画面用のステータスHTMLバッジ生成関数
+        function getManagerStatusBadge(status) {
+            if (status === '準備中') return '<span class="mgr-badge mgr-badge-preparing">準備中</span>';
+            if (status === '準備完了') return '<span class="mgr-badge mgr-badge-ready">準備完了</span>';
+            if (status === '非常') return '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+            return '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
+        }
+
         function setupAdminOrManager() {
             if (!database) return;
             statusRef = database.ref();
@@ -516,25 +533,30 @@
                 });
 
                 if (currentRole === '管理者') {
+                    // 受付
                     const mgrGuide = document.getElementById('mgr-受付');
                     mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
 
+                    // スタート
                     const mgrStart = document.getElementById('mgr-スタート');
                     if (val.startState === 'active') {
                         mgrStart.innerHTML = '<span class="badge-blue">スタート</span>';
                     } else {
                         const st = (places['スタート'] && places['スタート'].session) ? places['スタート'].status : '未接続';
-                        mgrStart.textContent = st;
+                        mgrStart.innerHTML = getManagerStatusBadge(st);
                     }
 
+                    // 場所1〜4
                     ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
                         const st = (places[p] && places[p].session) ? places[p].status : '未接続';
-                        document.getElementById('mgr-' + p).textContent = st;
+                        document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
                     });
 
+                    // 出発信号（点灯・消灯）
                     const depSignal = checkDepartureSignal(places);
                     document.getElementById('mgr-出発信号').innerHTML = depSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
 
+                    // 接近（点灯・消灯）
                     const approachSignal = (val.approachState === 'active');
                     document.getElementById('mgr-接近').innerHTML = approachSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
                 }
