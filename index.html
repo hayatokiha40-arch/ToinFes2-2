@@ -165,6 +165,7 @@
             background-color: #121212; transition: background-color 0.3s;
         }
         #screen-signal.light-on { background-color: #ffffff !important; }
+        #screen-signal.emergency-blink { animation: urgent-blink 0.8s infinite steps(1); }
 
         /* --- 5. 管理者画面 --- */
         #screen-manager {
@@ -457,6 +458,13 @@
             return diff < 5000;
         }
 
+        // 場所1〜4のどこかに「非常」があるかチェックする共通関数
+        function hasEmergencyStatus(places) {
+            if (!places) return false;
+            const targetPlaces = ['場所1', '場所2', '場所3', '場所4'];
+            return targetPlaces.some(p => isDeviceConnected(places[p]) && places[p].status === '非常');
+        }
+
         function renderAdminGrid(keys) {
             const container = document.getElementById('admin-grid-container');
             container.innerHTML = '';
@@ -530,11 +538,17 @@
                         document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
                     });
 
-                    const depSignal = checkDepartureSignal(places);
-                    document.getElementById('mgr-出発信号').innerHTML = depSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
+                    const isEmergency = hasEmergencyStatus(places);
+                    if (isEmergency) {
+                        document.getElementById('mgr-出発信号').innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+                        document.getElementById('mgr-接近').innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+                    } else {
+                        const depSignal = checkDepartureSignal(places);
+                        document.getElementById('mgr-出発信号').innerHTML = depSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
 
-                    const approachSignal = (val.approachState === 'active');
-                    document.getElementById('mgr-接近').innerHTML = approachSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
+                        const approachSignal = (val.approachState === 'active');
+                        document.getElementById('mgr-接近').innerHTML = approachSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
+                    }
                 }
             });
         }
@@ -645,7 +659,6 @@
         }
 
         function showBanner(text, durationMs, onComplete) {
-            // 【重要ガード】「スタート」および「場所1〜4」以外の役割では通知帯を出さない
             const allowedRoles = ['スタート', '場所1', '場所2', '場所3', '場所4'];
             if (!allowedRoles.includes(currentRole)) return;
 
@@ -672,16 +685,34 @@
                 placesRef = database.ref('places');
                 placesRef.on('value', snapshot => {
                     const places = snapshot.val() || {};
-                    const isLightOn = checkDepartureSignal(places);
-                    if (isLightOn) signalScreen.classList.add('light-on');
-                    else signalScreen.classList.remove('light-on');
+                    const isEmergency = hasEmergencyStatus(places);
+
+                    if (isEmergency) {
+                        signalScreen.classList.remove('light-on');
+                        signalScreen.classList.add('emergency-blink');
+                    } else {
+                        signalScreen.classList.remove('emergency-blink');
+                        const isLightOn = checkDepartureSignal(places);
+                        if (isLightOn) signalScreen.classList.add('light-on');
+                        else signalScreen.classList.remove('light-on');
+                    }
                 });
             } else if (currentRole === '接近') {
-                approachStateRef = database.ref('approachState');
-                approachStateRef.on('value', snapshot => {
-                    const state = snapshot.val();
-                    if (state === 'active') signalScreen.classList.add('light-on');
-                    else signalScreen.classList.remove('light-on');
+                statusRef = database.ref();
+                statusRef.on('value', snapshot => {
+                    const val = snapshot.val() || {};
+                    const places = val.places || {};
+                    const approachState = val.approachState;
+                    const isEmergency = hasEmergencyStatus(places);
+
+                    if (isEmergency) {
+                        signalScreen.classList.remove('light-on');
+                        signalScreen.classList.add('emergency-blink');
+                    } else {
+                        signalScreen.classList.remove('emergency-blink');
+                        if (approachState === 'active') signalScreen.classList.add('light-on');
+                        else signalScreen.classList.remove('light-on');
+                    }
                 });
             }
         }
