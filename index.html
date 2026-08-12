@@ -98,6 +98,30 @@
         }
         .btn-cancel:hover { background-color: #666; }
 
+        /* --- パスワード入力用モーダル --- */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.85); z-index: 200; justify-content: center; align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background-color: #1e1e1e; padding: 35px; border-radius: 12px;
+            text-align: center; border: 2px solid #555; width: 90%; max-width: 400px;
+        }
+        .modal-input {
+            width: 100%; padding: 12px; font-size: 22px; text-align: center;
+            background-color: #2a2a2a; color: #fff; border: 2px solid #666;
+            border-radius: 8px; margin: 20px 0; outline: none;
+        }
+        .modal-input:focus { border-color: #0066ff; }
+        .modal-btn-group { display: flex; gap: 10px; }
+        .modal-btn {
+            flex: 1; padding: 12px; font-size: 16px; font-weight: bold; border: none;
+            border-radius: 6px; cursor: pointer;
+        }
+        .modal-btn-submit { background-color: #0066ff; color: #fff; }
+        .modal-btn-cancel { background-color: #444; color: #fff; }
+
         /* --- 2. 受付・スタート 監視画面 --- */
         #screen-admin { flex-direction: column; padding: 15px; }
         .admin-grid {
@@ -108,7 +132,6 @@
             border: 3px solid #333; border-radius: 10px; display: flex;
             flex-direction: column; overflow: hidden; background-color: #1a1a1a;
         }
-        /* 受付画面でスタートの枠線を鮮やかな赤に */
         .status-cell.border-red { border-color: #ff0000 !important; }
         
         .cell-header {
@@ -181,7 +204,6 @@
         .manager-table th { background-color: #222; width: 40%; }
         .manager-table td { background-color: #1a1a1a; }
         
-        /* 管理者表内のバッジデザイン */
         .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
         .box-light-on { background-color: #ffffff; border: 2px solid #ffffff; height: 40px; width: 100%; display: block; }
         .box-light-off { background-color: #121212; border: 2px solid #444; height: 40px; width: 100%; display: block; }
@@ -208,6 +230,18 @@
             </select>
             <button class="btn-start" onclick="startApp()">この役割で開始する</button>
             <button id="btn-cancel-setup" class="btn-cancel" onclick="cancelSetup()">キャンセル</button>
+        </div>
+    </div>
+
+    <!-- パスワード入力ダイアログ -->
+    <div id="password-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h2 style="font-size:20px;">管理者パスワード入力</h2>
+            <input type="password" id="modal-pwd-input" class="modal-input" placeholder="••••••••" onkeypress="handlePwdKeyPress(event)">
+            <div class="modal-btn-group">
+                <button class="modal-btn modal-btn-cancel" onclick="closePwdModal()">キャンセル</button>
+                <button class="modal-btn modal-btn-submit" onclick="submitPassword()">認証</button>
+            </div>
         </div>
     </div>
 
@@ -278,9 +312,8 @@
 
         // 管理者パスワード設定 ( SHA-256ハッシュ値 )
         // 初期パスワード: "toin136"
-        const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
+        const MANAGER_PASSWORD_HASH = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
 
-        // パスワード照合用のハッシュ化関数
         async function sha256(plainText) {
             const encoder = new TextEncoder();
             const data = encoder.encode(plainText);
@@ -289,7 +322,6 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // Firebase初期化
         let database;
         if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
             firebase.initializeApp(firebaseConfig);
@@ -297,6 +329,7 @@
         }
 
         let currentRole = null;
+        let pendingRole = null;
         let mySessionId = null;
         let allPlacesData = {};
         let isFirstLoad = true;
@@ -314,7 +347,7 @@
             document.getElementById('screen-setup').style.display = 'none';
         }
 
-        async function startApp() {
+        function startApp() {
             const select = document.getElementById('role-select');
             const selectedRole = select.value;
             
@@ -323,17 +356,41 @@
                 return;
             }
 
-            // 管理者認証
             if (selectedRole === '管理者') {
-                const inputPwd = prompt("管理者パスワードを入力してください:");
-                if (!inputPwd) return;
-                const inputHash = await sha256(inputPwd);
-                if (inputHash !== MANAGER_PASSWORD_HASH) {
-                    alert("パスワードが誤っています。");
-                    return;
-                }
+                pendingRole = selectedRole;
+                document.getElementById('modal-pwd-input').value = '';
+                document.getElementById('password-modal').classList.add('active');
+                document.getElementById('modal-pwd-input').focus();
+            } else {
+                executeStartRole(selectedRole);
             }
+        }
 
+        function closePwdModal() {
+            document.getElementById('password-modal').classList.remove('active');
+            pendingRole = null;
+        }
+
+        function handlePwdKeyPress(e) {
+            if (e.key === 'Enter') submitPassword();
+        }
+
+        async function submitPassword() {
+            const pwdInput = document.getElementById('modal-pwd-input').value;
+            if (!pwdInput) return;
+
+            const inputHash = await sha256(pwdInput);
+            if (inputHash === MANAGER_PASSWORD_HASH) {
+                closePwdModal();
+                executeStartRole(pendingRole);
+            } else {
+                alert("パスワードが誤っています。");
+                document.getElementById('modal-pwd-input').value = '';
+                document.getElementById('modal-pwd-input').focus();
+            }
+        }
+
+        function executeStartRole(selectedRole) {
             if (!database) {
                 currentRole = selectedRole;
                 proceedToMainScreen();
@@ -342,7 +399,6 @@
 
             const newSessionId = Math.random().toString(36).substring(2, 15);
 
-            // 排他制御（受付・管理者以外）
             if (selectedRole !== '受付' && selectedRole !== '管理者') {
                 database.ref('places/' + selectedRole).once('value').then(snapshot => {
                     const data = snapshot.val();
@@ -355,7 +411,6 @@
                     mySessionId = newSessionId;
                     
                     let initData = { session: mySessionId };
-                    // ステータスを持つ役割のみ初期化
                     if (['スタート', '場所1', '場所2', '場所3', '場所4'].includes(currentRole)) {
                         initData.status = '準備中';
                     }
@@ -390,7 +445,7 @@
                 setupAdminOrManager();
             } else if (currentRole === 'スタート') {
                 document.getElementById('screen-admin').classList.add('active');
-                document.getElementById('screen-client').classList.add('active'); // グリッドと操作ボタンの両方を下部に配置
+                document.getElementById('screen-client').classList.add('active');
                 headerSpace.innerHTML = '<button class="btn-action-header" onclick="triggerStart()">スタート</button>';
                 renderAdminGrid(['場所1', '場所2', '場所3', '場所4']);
                 setupClient();
@@ -413,12 +468,10 @@
             if (eventRef) eventRef.off();
         }
 
-        // --- 受付・スタート用のグリッド動的作成 ---
         function renderAdminGrid(keys) {
             const container = document.getElementById('admin-grid-container');
             container.innerHTML = '';
             
-            // 要素数に応じてグリッド配置を調整
             if (keys.length <= 4) {
                 container.style.gridTemplateColumns = 'repeat(2, 1fr)';
                 container.style.gridTemplateRows = 'repeat(2, 1fr)';
@@ -440,7 +493,6 @@
             });
         }
 
-        // --- 監視処理 (受付, スタート, 管理者) ---
         function setupAdminOrManager() {
             if (!database) return;
             statusRef = database.ref();
@@ -449,7 +501,6 @@
                 const places = val.places || {};
                 allPlacesData = places;
 
-                // 1. 受付/スタート画面のグリッド更新
                 ['スタート', '場所1', '場所2', '場所3', '場所4'].forEach(key => {
                     const cellBody = document.getElementById('text-' + key);
                     if (cellBody) {
@@ -464,14 +515,10 @@
                     }
                 });
 
-                // 2. 管理者画面の更新
                 if (currentRole === '管理者') {
-                    // 受付
-                    const guideActive = val.guideEvent && (Date.now() - val.guideEvent < 300000);
                     const mgrGuide = document.getElementById('mgr-受付');
                     mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
 
-                    // スタート
                     const mgrStart = document.getElementById('mgr-スタート');
                     if (val.startState === 'active') {
                         mgrStart.innerHTML = '<span class="badge-blue">スタート</span>';
@@ -480,24 +527,20 @@
                         mgrStart.textContent = st;
                     }
 
-                    // 場所1〜4
                     ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
                         const st = (places[p] && places[p].session) ? places[p].status : '未接続';
                         document.getElementById('mgr-' + p).textContent = st;
                     });
 
-                    // 出発信号（点灯・消灯）
                     const depSignal = checkDepartureSignal(places);
                     document.getElementById('mgr-出発信号').innerHTML = depSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
 
-                    // 接近（点灯・消灯）
                     const approachSignal = (val.approachState === 'active');
                     document.getElementById('mgr-接近').innerHTML = approachSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
                 }
             });
         }
 
-        // 出発信号の点灯判定（接続中のものがすべて準備完了）
         function checkDepartureSignal(places) {
             const targetPlaces = ['場所1', '場所2', '場所3', '場所4'];
             let connectedCount = 0;
@@ -513,7 +556,6 @@
             return (connectedCount > 0 && connectedCount === readyCount);
         }
 
-        // --- 受付：「案内」ボタン ---
         function triggerGuide() {
             const startData = allPlacesData['スタート'];
             const startStatus = (startData && startData.session) ? startData.status : '未接続';
@@ -528,11 +570,10 @@
             database.ref().update({
                 'guideEvent': firebase.database.ServerValue.TIMESTAMP,
                 'guideState': 'active',
-                'approachState': 'off' // 接近を消灯
+                'approachState': 'off'
             });
         }
 
-        // --- スタート：「スタート」ボタン ---
         function triggerStart() {
             let hasPreparing = false;
             let hasEmergency = false;
@@ -554,17 +595,15 @@
             database.ref().update({
                 'startEvent': firebase.database.ServerValue.TIMESTAMP,
                 'startState': 'active',
-                'approachState': 'active', // 接近を点灯
-                'guideState': 'off'       // 管理者用案内表示をクリア
+                'approachState': 'active',
+                'guideState': 'off'
             });
         }
 
-        // --- 場所・スタート画面（操作端末） ---
         function setupClient() {
             if (!database) return;
             isFirstLoad = true;
 
-            // ステータス同期
             statusRef = database.ref(`places/${currentRole}/status`);
             statusRef.on('value', snapshot => {
                 const status = snapshot.val() || '準備中';
@@ -574,7 +613,6 @@
                 else if (status === '非常') document.getElementById('btn-status-emergency').classList.add('active');
             });
 
-            // 乗っ取り監視
             sessionRef = database.ref(`places/${currentRole}/session`);
             sessionRef.on('value', snapshot => {
                 const sId = snapshot.val();
@@ -587,7 +625,6 @@
                 }
             });
 
-            // 案内（受付リセット）通知監視（スタート端末のみ）
             if (currentRole === 'スタート') {
                 database.ref('guideEvent').on('value', snapshot => {
                     if (isFirstLoad) return;
@@ -595,11 +632,9 @@
                 });
             }
 
-            // スタートイベント監視（スタート & 場所1〜4端末）
             database.ref('startEvent').on('value', snapshot => {
                 if (isFirstLoad) { isFirstLoad = false; return; }
                 showBanner('スタート', 20000, () => {
-                    // 20秒経過後に準備中にリセット
                     updateStatus('準備中');
                     if (currentRole === 'スタート') {
                         database.ref('startState').set('off');
@@ -624,7 +659,6 @@
             database.ref(`places/${currentRole}`).update({ status: newStatus });
         }
 
-        // --- 信号画面（出発信号・接近）---
         function setupSignal() {
             if (!database) return;
             const signalScreen = document.getElementById('screen-signal');
