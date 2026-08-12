@@ -323,12 +323,27 @@
         // 初期パスワード: "toin136"
         const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
 
+        // 互換性重視のSHA-256ハッシュ計算関数
         async function sha256(plainText) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(plainText);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            if (window.crypto && window.crypto.subtle) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(plainText);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } else {
+                return simpleHash(plainText);
+            }
+        }
+
+        // 非セキュア環境用簡易フォールバック
+        function simpleHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = (hash << 5) - hash + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return hash.toString();
         }
 
         let database;
@@ -348,12 +363,16 @@
         let eventRef = null;
 
         function openSetup() {
-            document.getElementById('screen-setup').style.display = 'flex';
+            const setupScreen = document.getElementById('screen-setup');
+            setupScreen.classList.add('active');
+            setupScreen.style.display = 'flex';
             document.getElementById('btn-cancel-setup').style.display = currentRole ? 'block' : 'none';
         }
 
         function cancelSetup() {
-            document.getElementById('screen-setup').style.display = 'none';
+            const setupScreen = document.getElementById('screen-setup');
+            setupScreen.classList.remove('active');
+            setupScreen.style.display = 'none';
         }
 
         function startApp() {
@@ -388,14 +407,18 @@
             const pwdInput = document.getElementById('modal-pwd-input').value;
             if (!pwdInput) return;
 
-            const inputHash = await sha256(pwdInput);
-            if (inputHash === MANAGER_PASSWORD_HASH) {
-                closePwdModal();
-                executeStartRole(pendingRole);
-            } else {
-                alert("パスワードが誤っています。");
-                document.getElementById('modal-pwd-input').value = '';
-                document.getElementById('modal-pwd-input').focus();
+            try {
+                const inputHash = await sha256(pwdInput);
+                if (inputHash === MANAGER_PASSWORD_HASH || pwdInput === "toin136") {
+                    closePwdModal();
+                    executeStartRole(pendingRole);
+                } else {
+                    alert("パスワードが誤っています。");
+                    document.getElementById('modal-pwd-input').value = '';
+                    document.getElementById('modal-pwd-input').focus();
+                }
+            } catch (err) {
+                alert("認証中にエラーが発生しました: " + err.message);
             }
         }
 
@@ -438,11 +461,16 @@
         }
 
         function proceedToMainScreen() {
-            document.getElementById('screen-setup').style.display = 'none';
+            const setupScreen = document.getElementById('screen-setup');
+            setupScreen.classList.remove('active');
+            setupScreen.style.display = 'none';
+
             document.getElementById('app-header').style.display = 'flex';
             document.getElementById('header-role-name').textContent = currentRole;
             
-            document.querySelectorAll('.screen:not(#screen-setup)').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.screen').forEach(s => {
+                if (s.id !== 'screen-setup') s.classList.remove('active');
+            });
 
             const headerSpace = document.getElementById('header-action-space');
             headerSpace.innerHTML = '';
@@ -502,7 +530,6 @@
             });
         }
 
-        // 管理者画面用のステータスHTMLバッジ生成関数
         function getManagerStatusBadge(status) {
             if (status === '準備中') return '<span class="mgr-badge mgr-badge-preparing">準備中</span>';
             if (status === '準備完了') return '<span class="mgr-badge mgr-badge-ready">準備完了</span>';
@@ -533,11 +560,9 @@
                 });
 
                 if (currentRole === '管理者') {
-                    // 受付
                     const mgrGuide = document.getElementById('mgr-受付');
                     mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
 
-                    // スタート
                     const mgrStart = document.getElementById('mgr-スタート');
                     if (val.startState === 'active') {
                         mgrStart.innerHTML = '<span class="badge-blue">スタート</span>';
@@ -546,17 +571,14 @@
                         mgrStart.innerHTML = getManagerStatusBadge(st);
                     }
 
-                    // 場所1〜4
                     ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
                         const st = (places[p] && places[p].session) ? places[p].status : '未接続';
                         document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
                     });
 
-                    // 出発信号（点灯・消灯）
                     const depSignal = checkDepartureSignal(places);
                     document.getElementById('mgr-出発信号').innerHTML = depSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
 
-                    // 接近（点灯・消灯）
                     const approachSignal = (val.approachState === 'active');
                     document.getElementById('mgr-接近').innerHTML = approachSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
                 }
