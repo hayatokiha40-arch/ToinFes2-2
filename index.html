@@ -8,9 +8,9 @@
     <!-- ファビコン設定 -->
     <link rel="icon" href="Favicon.jpg" type="image/jpeg">
 
-    <!-- キャッシュ対策付きで外部SDKを読み込み -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js?v=1.0.0"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js?v=1.0.0"></script>
+    <!-- SDK読み込み -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
@@ -28,7 +28,7 @@
         .app-header {
             background-color: #1e1e1e;
             padding: 15px 24px;
-            display: flex;
+            display: none; /* 初期状態は非表示 */
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2d2d2d;
@@ -66,9 +66,14 @@
 
         /* --- 画面コンテナ --- */
         .screen {
-            display: none; flex: 1; width: 100%; height: calc(100vh - 70px);
+            display: none !important; 
+            flex: 1; 
+            width: 100%; 
+            height: calc(100vh - 70px);
         }
-        .screen.active { display: flex; }
+        .screen.active { 
+            display: flex !important; 
+        }
 
         /* --- 1. セットアップ（役割選択）画面 --- */
         #screen-setup {
@@ -157,7 +162,7 @@
             padding: 10px 40px; font-size: 20px; font-weight: bold; border-radius: 50px; cursor: pointer;
         }
 
-        /* --- 3. クライアント（場所1〜4・スタート操作）画面 --- */
+        /* --- 3. クライアント画面 --- */
         #screen-client { 
             padding: 20px; gap: 20px; align-items: center; 
             height: calc(100vh - 70px); transition: height 0.2s ease;
@@ -183,7 +188,7 @@
         }
         .client-btn.active { opacity: 1; transform: scale(1.02); border-width: 6px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
 
-        /* --- 4. 信号画面（出発信号・接近）--- */
+        /* --- 4. 信号画面 --- */
         #screen-signal {
             width: 100%; height: calc(100vh - 70px);
             background-color: #121212; transition: background-color 0.3s;
@@ -204,7 +209,6 @@
         .manager-table th { background-color: #222; width: 40%; }
         .manager-table td { background-color: #1a1a1a; }
         
-        /* 管理者画面用のステータスバッジ */
         .mgr-badge {
             display: inline-block; padding: 8px 24px; border-radius: 8px; font-weight: bold; width: 80%;
         }
@@ -255,7 +259,7 @@
     </div>
 
     <!-- ヘッダー -->
-    <div class="app-header" id="app-header" style="display: none;">
+    <div class="app-header" id="app-header">
         <div>
             <span style="color:#aaa; font-size:14px;">現在の役割: </span>
             <span id="header-role-name" class="role-display">未設定</span>
@@ -267,21 +271,19 @@
     <!-- 通知帯 -->
     <div id="visitor-banner">来客</div>
 
-    <!-- 受付・スタート（監視）画面 -->
+    <!-- 受付・スタート 監視画面 -->
     <div id="screen-admin" class="screen">
-        <div class="admin-grid" id="admin-grid-container">
-            <!-- 動的生成 -->
-        </div>
+        <div class="admin-grid" id="admin-grid-container"></div>
     </div>
 
-    <!-- クライアント画面（場所1〜4・スタートボタン操作用） -->
+    <!-- クライアント画面 -->
     <div id="screen-client" class="screen">
         <div class="client-btn btn-preparing active" id="btn-status-preparing" onclick="updateStatus('準備中')">準備中</div>
         <div class="client-btn btn-ready" id="btn-status-ready" onclick="updateStatus('準備完了')">準備完了</div>
         <div class="client-btn btn-emergency" id="btn-status-emergency" onclick="updateStatus('非常')">非常</div>
     </div>
 
-    <!-- 信号（出発信号・接近）画面 -->
+    <!-- 信号画面 -->
     <div id="screen-signal" class="screen"></div>
 
     <!-- 管理者画面 -->
@@ -305,9 +307,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // 【重要】Firebase設定
-        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBZB8je1MsKFzgEShCKIZk0xB3zHzMgDAE",
             authDomain: "toin-fes-2-2.firebaseapp.com",
@@ -319,31 +318,18 @@
             measurementId: "G-HSFCX7T9J2"
         };
 
-        // 管理者パスワード設定 ( SHA-256ハッシュ値 )
-        // 初期パスワード: "toin136"
         const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
 
-        // 互換性重視のSHA-256ハッシュ計算関数
         async function sha256(plainText) {
-            if (window.crypto && window.crypto.subtle) {
-                const encoder = new TextEncoder();
-                const data = encoder.encode(plainText);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            } else {
-                return simpleHash(plainText);
-            }
-        }
-
-        // 非セキュア環境用簡易フォールバック
-        function simpleHash(str) {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = (hash << 5) - hash + str.charCodeAt(i);
-                hash |= 0;
-            }
-            return hash.toString();
+            try {
+                if (window.crypto && window.crypto.subtle) {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(plainText);
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+                }
+            } catch(e) {}
+            return plainText; // フォールバック
         }
 
         let database;
@@ -365,14 +351,12 @@
         function openSetup() {
             const setupScreen = document.getElementById('screen-setup');
             setupScreen.classList.add('active');
-            setupScreen.style.display = 'flex';
             document.getElementById('btn-cancel-setup').style.display = currentRole ? 'block' : 'none';
         }
 
         function cancelSetup() {
             const setupScreen = document.getElementById('screen-setup');
             setupScreen.classList.remove('active');
-            setupScreen.style.display = 'none';
         }
 
         function startApp() {
@@ -407,18 +391,16 @@
             const pwdInput = document.getElementById('modal-pwd-input').value;
             if (!pwdInput) return;
 
-            try {
-                const inputHash = await sha256(pwdInput);
-                if (inputHash === MANAGER_PASSWORD_HASH || pwdInput === "toin136") {
-                    closePwdModal();
-                    executeStartRole(pendingRole);
-                } else {
-                    alert("パスワードが誤っています。");
-                    document.getElementById('modal-pwd-input').value = '';
-                    document.getElementById('modal-pwd-input').focus();
-                }
-            } catch (err) {
-                alert("認証中にエラーが発生しました: " + err.message);
+            const inputHash = await sha256(pwdInput);
+            
+            // パスワードチェック (ハッシュ一致 OR 平文一致)
+            if (inputHash === MANAGER_PASSWORD_HASH || pwdInput === "toin136") {
+                closePwdModal();
+                executeStartRole(pendingRole);
+            } else {
+                alert("パスワードが誤っています。");
+                document.getElementById('modal-pwd-input').value = '';
+                document.getElementById('modal-pwd-input').focus();
             }
         }
 
@@ -461,20 +443,23 @@
         }
 
         function proceedToMainScreen() {
+            // 役割選択画面（Setup）を完全に閉じる
             const setupScreen = document.getElementById('screen-setup');
             setupScreen.classList.remove('active');
-            setupScreen.style.display = 'none';
 
+            // 全ての画面クラスをリセット
+            document.querySelectorAll('.screen').forEach(s => {
+                s.classList.remove('active');
+            });
+
+            // ヘッダー表示
             document.getElementById('app-header').style.display = 'flex';
             document.getElementById('header-role-name').textContent = currentRole;
-            
-            document.querySelectorAll('.screen').forEach(s => {
-                if (s.id !== 'screen-setup') s.classList.remove('active');
-            });
 
             const headerSpace = document.getElementById('header-action-space');
             headerSpace.innerHTML = '';
 
+            // 役割ごとの画面切り替え
             if (currentRole === '受付') {
                 document.getElementById('screen-admin').classList.add('active');
                 headerSpace.innerHTML = '<button class="btn-action-header" onclick="triggerGuide()">案内</button>';
