@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>桐陰祭136-2準備状況確認システム</title>
+    <title>桐陰祭136-2信号システム</title>
+    
+    <!-- ファビコン設定 -->
     <link rel="icon" href="Favicon.jpg" type="image/jpeg">
+
     <!-- キャッシュ対策付きで外部SDKを読み込み -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js?v=1.0.0"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js?v=1.0.0"></script>
@@ -30,6 +33,7 @@
             align-items: center;
             border-bottom: 2px solid #2d2d2d;
             height: 70px;
+            z-index: 10;
         }
         .role-display { font-size: 18px; font-weight: bold; }
         .btn-change-role {
@@ -38,10 +42,10 @@
         }
         .btn-change-role:hover { background-color: #666666; }
 
-        /* --- 来客通知用の横帯（ヘッダーとボタンの隙間用） --- */
+        /* --- 通知用の横帯 --- */
         #visitor-banner {
             width: 100%;
-            height: 0; /* 初期は非表示 */
+            height: 0;
             background-color: #0033cc;
             color: #ffffff;
             font-size: 28px;
@@ -56,7 +60,7 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         #visitor-banner.active {
-            height: 55px; /* 表示時ににょきっと出現 */
+            height: 55px;
             padding: 5px 0;
         }
 
@@ -94,7 +98,7 @@
         }
         .btn-cancel:hover { background-color: #666; }
 
-        /* --- 2. 受付（監視）画面 --- */
+        /* --- 2. 受付・スタート 監視画面 --- */
         #screen-admin { flex-direction: column; padding: 15px; }
         .admin-grid {
             display: grid; grid-template-columns: repeat(3, 1fr);
@@ -104,6 +108,9 @@
             border: 3px solid #333; border-radius: 10px; display: flex;
             flex-direction: column; overflow: hidden; background-color: #1a1a1a;
         }
+        /* 受付画面でスタートの枠線を鮮やかな赤に */
+        .status-cell.border-red { border-color: #ff0000 !important; }
+        
         .cell-header {
             background-color: #000; padding: 8px 0; text-align: center;
             font-size: 20px; font-weight: bold; border-bottom: 2px solid #333;
@@ -113,37 +120,26 @@
             font-size: 40px; font-weight: bold;
         }
         
-        /* 受付画面 各状態のデザイン */
-        .status-unconnected { background-color: #2a2a2a; color: #666666; } /* 未接続 */
-        .status-preparing { background-color: #ffffff; color: #000000; }     /* 準備中 */
-        .status-ready { background-color: #0033cc; color: #ffffff; }         /* 準備完了 */
-        
-        /* 非常に注意を引きやすく、かつ目が疲れない「緩急パトランプ」アニメーション */
-        .status-emergency { 
-            animation: urgent-blink 0.8s infinite steps(1); 
-        }
+        .status-unconnected { background-color: #2a2a2a; color: #666666; }
+        .status-preparing { background-color: #ffffff; color: #000000; }
+        .status-ready { background-color: #0033cc; color: #ffffff; }
+        .status-emergency { animation: urgent-blink 0.8s infinite steps(1); }
         @keyframes urgent-blink {
-            0%, 75% { background-color: #ff0000; color: #ffffff; } /* 0.6秒間、しっかり明るい赤（75%） */
-            75.1%, 100% { background-color: #330000; color: #666666; } /* 0.2秒間、一瞬だけ暗い赤（25%） */
+            0%, 75% { background-color: #ff0000; color: #ffffff; }
+            75.1%, 100% { background-color: #330000; color: #666666; }
         }
         
-        .btn-reset {
+        .btn-action-header {
             background-color: #00ff33; color: #000; border: none;
             padding: 10px 40px; font-size: 20px; font-weight: bold; border-radius: 50px; cursor: pointer;
         }
 
-        /* --- 3. 各場所操作画面 --- */
+        /* --- 3. クライアント（場所1〜4・スタート操作）画面 --- */
         #screen-client { 
-            padding: 20px; 
-            gap: 20px; 
-            align-items: center; 
-            height: calc(100vh - 70px); /* 帯が縮んでいる際の基準 */
-            transition: height 0.2s ease;
+            padding: 20px; gap: 20px; align-items: center; 
+            height: calc(100vh - 70px); transition: height 0.2s ease;
         }
-        /* 帯が出現した際に、ボタンがはみ出さないよう調整 */
-        #visitor-banner.active + #screen-client {
-            height: calc(100vh - 125px);
-        }
+        #visitor-banner.active + #screen-client { height: calc(100vh - 125px); }
         
         .client-btn {
             flex: 1; height: 80%; border: 4px solid #444; border-radius: 15px;
@@ -152,59 +148,70 @@
         }
         .client-btn.btn-preparing { background-color: #222; border-color: #555; }
         .client-btn.btn-ready { background-color: #0044cc; border-color: #0066ff; }
+        .client-btn.btn-emergency { background-color: #550000; border-color: #ff0000; color: #ffb3b3; opacity: 0.7; }
         
-        /* 【改善】「非常」ボタンは非アクティブでも絶対に暗闇に埋もれないよう、特別に明るく（opacity: 0.7）設定 */
-        .client-btn.btn-emergency { 
-            background-color: #550000; 
-            border-color: #ff0000; 
-            color: #ffb3b3; 
-            opacity: 0.7; 
-        }
-        
-        /* アクティブ（選択中）時のデザイン調整 */
-        /* 【改善】「準備中」が選ばれた際は明るい白背景にし、文字を黒くして視認性を極限までUP */
         .client-btn.btn-preparing.active { 
-            opacity: 1; 
-            background-color: #ffffff !important; 
-            color: #000000 !important;
-            transform: scale(1.02); 
-            border: 6px solid #ffcc00; /* アクティブを目立たせる黄色枠 */
-            box-shadow: 0 0 25px rgba(255,255,255,0.4); 
+            opacity: 1; background-color: #ffffff !important; color: #000000 !important;
+            transform: scale(1.02); border: 6px solid #ffcc00; box-shadow: 0 0 25px rgba(255,255,255,0.4); 
         }
-        
-        /* 【改善】「非常」ボタンがアクティブになったときは、さらに強烈なフルパワー赤（不透明度1.0 & 白文字）へ */
         .client-btn.btn-emergency.active {
-            opacity: 1;
-            background-color: #ff0000 !important;
-            border-color: #ffffff !important;
-            color: #ffffff !important;
-            box-shadow: 0 0 30px rgba(255,0,0,0.8);
+            opacity: 1; background-color: #ff0000 !important; border-color: #ffffff !important;
+            color: #ffffff !important; box-shadow: 0 0 30px rgba(255,0,0,0.8);
         }
-        
         .client-btn.active { opacity: 1; transform: scale(1.02); border-width: 6px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
+
+        /* --- 4. 信号画面（出発信号・接近）--- */
+        #screen-signal {
+            width: 100%; height: calc(100vh - 70px);
+            background-color: #121212; transition: background-color 0.3s;
+        }
+        #screen-signal.light-on { background-color: #ffffff !important; }
+
+        /* --- 5. 管理者画面 --- */
+        #screen-manager {
+            padding: 30px; flex-direction: column; align-items: center; justify-content: flex-start;
+            overflow-y: auto;
+        }
+        .manager-table {
+            width: 100%; max-width: 800px; border-collapse: collapse; margin-top: 20px;
+        }
+        .manager-table th, .manager-table td {
+            border: 2px solid #444; padding: 15px; text-align: center; font-size: 22px; font-weight: bold;
+        }
+        .manager-table th { background-color: #222; width: 40%; }
+        .manager-table td { background-color: #1a1a1a; }
+        
+        /* 管理者表内のバッジデザイン */
+        .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
+        .box-light-on { background-color: #ffffff; border: 2px solid #ffffff; height: 40px; width: 100%; display: block; }
+        .box-light-off { background-color: #121212; border: 2px solid #444; height: 40px; width: 100%; display: block; }
 
     </style>
 </head>
 <body>
 
+    <!-- 役割選択画面 -->
     <div id="screen-setup" class="screen active">
         <div class="setup-box">
             <h1 class="setup-title">端末の役割を設定してください</h1>
             <select id="role-select" class="custom-dropdown">
                 <option value="">-- 選択してください --</option>
                 <option value="受付">受付</option>
+                <option value="スタート">スタート</option>
                 <option value="場所1">場所 1</option>
                 <option value="場所2">場所 2</option>
                 <option value="場所3">場所 3</option>
                 <option value="場所4">場所 4</option>
-                <option value="場所5">場所 5</option>
-                <option value="場所6">場所 6</option>
+                <option value="出発信号">出発信号</option>
+                <option value="接近">接近</option>
+                <option value="管理者">管理者</option>
             </select>
             <button class="btn-start" onclick="startApp()">この役割で開始する</button>
             <button id="btn-cancel-setup" class="btn-cancel" onclick="cancelSetup()">キャンセル</button>
         </div>
     </div>
 
+    <!-- ヘッダー -->
     <div class="app-header" id="app-header" style="display: none;">
         <div>
             <span style="color:#aaa; font-size:14px;">現在の役割: </span>
@@ -214,29 +221,49 @@
         <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
     </div>
 
-    <!-- 来客通知用の帯（非全画面・通常時は高さ0 / テキストを「来客」に変更） -->
+    <!-- 通知帯 -->
     <div id="visitor-banner">来客</div>
 
+    <!-- 受付・スタート（監視）画面 -->
     <div id="screen-admin" class="screen">
-        <div class="admin-grid">
-            <div class="status-cell" id="cell-場所1"><div class="cell-header">場所 1</div><div class="cell-body status-unconnected" id="text-場所1">未接続</div></div>
-            <div class="status-cell" id="cell-場所2"><div class="cell-header">場所 2</div><div class="cell-body status-unconnected" id="text-場所2">未接続</div></div>
-            <div class="status-cell" id="cell-場所3"><div class="cell-header">場所 3</div><div class="cell-body status-unconnected" id="text-場所3">未接続</div></div>
-            <div class="status-cell" id="cell-場所4"><div class="cell-header">場所 4</div><div class="cell-body status-unconnected" id="text-場所4">未接続</div></div>
-            <div class="status-cell" id="cell-場所5"><div class="cell-header">場所 5</div><div class="cell-body status-unconnected" id="text-場所5">未接続</div></div>
-            <div class="status-cell" id="cell-場所6"><div class="cell-header">場所 6</div><div class="cell-body status-unconnected" id="text-場所6">未接続</div></div>
+        <div class="admin-grid" id="admin-grid-container">
+            <!-- 動的生成 -->
         </div>
     </div>
 
+    <!-- クライアント画面（場所1〜4・スタートボタン操作用） -->
     <div id="screen-client" class="screen">
         <div class="client-btn btn-preparing active" id="btn-status-preparing" onclick="updateStatus('準備中')">準備中</div>
         <div class="client-btn btn-ready" id="btn-status-ready" onclick="updateStatus('準備完了')">準備完了</div>
         <div class="client-btn btn-emergency" id="btn-status-emergency" onclick="updateStatus('非常')">非常</div>
     </div>
 
+    <!-- 信号（出発信号・接近）画面 -->
+    <div id="screen-signal" class="screen"></div>
+
+    <!-- 管理者画面 -->
+    <div id="screen-manager" class="screen">
+        <h2 style="font-size:28px; margin-bottom:10px;">全体状況監視（管理者）</h2>
+        <table class="manager-table">
+            <thead>
+                <tr><th>役割</th><th>現在の状態</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>受付</td><td id="mgr-受付">-</td></tr>
+                <tr><td>スタート</td><td id="mgr-スタート">-</td></tr>
+                <tr><td>場所 1</td><td id="mgr-場所1">-</td></tr>
+                <tr><td>場所 2</td><td id="mgr-場所2">-</td></tr>
+                <tr><td>場所 3</td><td id="mgr-場所3">-</td></tr>
+                <tr><td>場所 4</td><td id="mgr-場所4">-</td></tr>
+                <tr><td>出発信号</td><td id="mgr-出発信号">-</td></tr>
+                <tr><td>接近</td><td id="mgr-接近">-</td></tr>
+            </tbody>
+        </table>
+    </div>
+
     <script>
         // ==========================================
-        // 【重要】Firebase設定をここに貼り付けます
+        // 【重要】Firebase設定
         // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBZB8je1MsKFzgEShCKIZk0xB3zHzMgDAE",
@@ -249,46 +276,62 @@
             measurementId: "G-HSFCX7T9J2"
         };
 
+        // 管理者パスワード設定 ( SHA-256ハッシュ値 )
+        // 初期パスワード: "toin136"
+        const MANAGER_PASSWORD_HASH = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
+
+        // パスワード照合用のハッシュ化関数
+        async function sha256(plainText) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(plainText);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         // Firebase初期化
         let database;
         if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
             firebase.initializeApp(firebaseConfig);
             database = firebase.database();
-        } else {
-            console.warn("デモモードで動作中です。（Firebase未設定）");
         }
 
-        // 変数管理
         let currentRole = null;
         let mySessionId = null;
-        let currentStatuses = {};
+        let allPlacesData = {};
         let isFirstLoad = true;
-        
+
         let statusRef = null;
         let sessionRef = null;
-        let resetEventRef = null;
+        let eventRef = null;
 
-        // --- セットアップ（役割変更）処理 ---
         function openSetup() {
             document.getElementById('screen-setup').style.display = 'flex';
-            if (currentRole) {
-                document.getElementById('btn-cancel-setup').style.display = 'block';
-            } else {
-                document.getElementById('btn-cancel-setup').style.display = 'none';
-            }
+            document.getElementById('btn-cancel-setup').style.display = currentRole ? 'block' : 'none';
         }
 
         function cancelSetup() {
             document.getElementById('screen-setup').style.display = 'none';
         }
 
-        function startApp() {
+        async function startApp() {
             const select = document.getElementById('role-select');
             const selectedRole = select.value;
             
             if (!selectedRole) {
                 alert("役割を選択してください！");
                 return;
+            }
+
+            // 管理者認証
+            if (selectedRole === '管理者') {
+                const inputPwd = prompt("管理者パスワードを入力してください:");
+                if (!inputPwd) return;
+                const inputHash = await sha256(inputPwd);
+                if (inputHash !== MANAGER_PASSWORD_HASH) {
+                    alert("パスワードが誤っています。");
+                    return;
+                }
             }
 
             if (!database) {
@@ -299,27 +342,27 @@
 
             const newSessionId = Math.random().toString(36).substring(2, 15);
 
-            if (selectedRole !== '受付') {
-                // 重複・乗っ取りチェック
+            // 排他制御（受付・管理者以外）
+            if (selectedRole !== '受付' && selectedRole !== '管理者') {
                 database.ref('places/' + selectedRole).once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data && data.session && selectedRole !== currentRole) {
-                        const confirmMsg = `${selectedRole} はすでに他の端末で使用されている可能性があります。\n強制的にこの端末に切り替えますか？`;
-                        if (!confirm(confirmMsg)) return;
+                        if (!confirm(`${selectedRole} はすでに他の端末で使用されています。\n強制的にこの端末に切り替えますか？`)) return;
                     }
                     
                     clearListeners();
                     currentRole = selectedRole;
                     mySessionId = newSessionId;
                     
-                    // 接続開始時にセッションとステータスを書き込む
-                    database.ref('places/' + currentRole).update({
-                        session: mySessionId,
-                        status: '準備中'
-                    }).then(() => {
-                        // オフライン切断時のイベントを設定（これでアプリが閉じられたら自動的に未接続化する）
+                    let initData = { session: mySessionId };
+                    // ステータスを持つ役割のみ初期化
+                    if (['スタート', '場所1', '場所2', '場所3', '場所4'].includes(currentRole)) {
+                        initData.status = '準備中';
+                    }
+
+                    database.ref('places/' + currentRole).update(initData).then(() => {
                         database.ref('places/' + currentRole + '/session').onDisconnect().remove();
-                        database.ref('places/' + currentRole + '/status').onDisconnect().remove();
+                        if (initData.status) database.ref('places/' + currentRole + '/status').onDisconnect().remove();
                         proceedToMainScreen();
                     });
                 });
@@ -337,89 +380,191 @@
             
             document.querySelectorAll('.screen:not(#screen-setup)').forEach(s => s.classList.remove('active'));
 
+            const headerSpace = document.getElementById('header-action-space');
+            headerSpace.innerHTML = '';
+
             if (currentRole === '受付') {
                 document.getElementById('screen-admin').classList.add('active');
-                document.getElementById('header-action-space').innerHTML = '<button class="btn-reset" onclick="triggerReset()">リセット</button>';
-                setupAdmin();
-            } else {
-                document.getElementById('screen-client').classList.add('active');
-                document.getElementById('header-action-space').innerHTML = '';
+                headerSpace.innerHTML = '<button class="btn-action-header" onclick="triggerGuide()">案内</button>';
+                renderAdminGrid(['スタート', '場所1', '場所2', '場所3', '場所4']);
+                setupAdminOrManager();
+            } else if (currentRole === 'スタート') {
+                document.getElementById('screen-admin').classList.add('active');
+                document.getElementById('screen-client').classList.add('active'); // グリッドと操作ボタンの両方を下部に配置
+                headerSpace.innerHTML = '<button class="btn-action-header" onclick="triggerStart()">スタート</button>';
+                renderAdminGrid(['場所1', '場所2', '場所3', '場所4']);
                 setupClient();
+                setupAdminOrManager();
+            } else if (['場所1', '場所2', '場所3', '場所4'].includes(currentRole)) {
+                document.getElementById('screen-client').classList.add('active');
+                setupClient();
+            } else if (currentRole === '出発信号' || currentRole === '接近') {
+                document.getElementById('screen-signal').classList.add('active');
+                setupSignal();
+            } else if (currentRole === '管理者') {
+                document.getElementById('screen-manager').classList.add('active');
+                setupAdminOrManager();
             }
         }
 
         function clearListeners() {
             if (statusRef) statusRef.off();
             if (sessionRef) sessionRef.off();
-            if (resetEventRef) resetEventRef.off();
+            if (eventRef) eventRef.off();
         }
 
-        // --- 受付画面の処理 ---
-        function setupAdmin() {
+        // --- 受付・スタート用のグリッド動的作成 ---
+        function renderAdminGrid(keys) {
+            const container = document.getElementById('admin-grid-container');
+            container.innerHTML = '';
+            
+            // 要素数に応じてグリッド配置を調整
+            if (keys.length <= 4) {
+                container.style.gridTemplateColumns = 'repeat(2, 1fr)';
+                container.style.gridTemplateRows = 'repeat(2, 1fr)';
+            } else {
+                container.style.gridTemplateColumns = 'repeat(3, 1fr)';
+                container.style.gridTemplateRows = 'repeat(2, 1fr)';
+            }
+
+            keys.forEach(key => {
+                const isStart = (key === 'スタート');
+                const borderClass = (currentRole === '受付' && isStart) ? 'border-red' : '';
+                const html = `
+                    <div class="status-cell ${borderClass}" id="cell-${key}">
+                        <div class="cell-header">${key}</div>
+                        <div class="cell-body status-unconnected" id="text-${key}">未接続</div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+
+        // --- 監視処理 (受付, スタート, 管理者) ---
+        function setupAdminOrManager() {
             if (!database) return;
-            statusRef = database.ref('places');
+            statusRef = database.ref();
             statusRef.on('value', snapshot => {
-                const data = snapshot.val() || {};
-                for (let i = 1; i <= 6; i++) {
-                    const pKey = '場所' + i;
-                    // セッションが空、またはステータスが存在しない場合は「未接続」にする
-                    const isConnected = data[pKey] && data[pKey].session;
-                    const status = isConnected ? data[pKey].status : '未接続';
-                    currentStatuses[pKey] = status;
-                    
-                    const cellBody = document.getElementById('text-' + pKey);
+                const val = snapshot.val() || {};
+                const places = val.places || {};
+                allPlacesData = places;
+
+                // 1. 受付/スタート画面のグリッド更新
+                ['スタート', '場所1', '場所2', '場所3', '場所4'].forEach(key => {
+                    const cellBody = document.getElementById('text-' + key);
                     if (cellBody) {
+                        const isConnected = places[key] && places[key].session;
+                        const status = isConnected ? places[key].status : '未接続';
                         cellBody.textContent = status;
                         cellBody.className = 'cell-body';
-                        if (status === '未接続') {
-                            cellBody.classList.add('status-unconnected');
-                        } else if (status === '準備中') {
-                            cellBody.classList.add('status-preparing');
-                        } else if (status === '準備完了') {
-                            cellBody.classList.add('status-ready');
-                        } else if (status === '非常') {
-                            cellBody.classList.add('status-emergency');
-                        }
+                        if (status === '未接続') cellBody.classList.add('status-unconnected');
+                        else if (status === '準備中') cellBody.classList.add('status-preparing');
+                        else if (status === '準備完了') cellBody.classList.add('status-ready');
+                        else if (status === '非常') cellBody.classList.add('status-emergency');
                     }
+                });
+
+                // 2. 管理者画面の更新
+                if (currentRole === '管理者') {
+                    // 受付
+                    const guideActive = val.guideEvent && (Date.now() - val.guideEvent < 300000);
+                    const mgrGuide = document.getElementById('mgr-受付');
+                    mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
+
+                    // スタート
+                    const mgrStart = document.getElementById('mgr-スタート');
+                    if (val.startState === 'active') {
+                        mgrStart.innerHTML = '<span class="badge-blue">スタート</span>';
+                    } else {
+                        const st = (places['スタート'] && places['スタート'].session) ? places['スタート'].status : '未接続';
+                        mgrStart.textContent = st;
+                    }
+
+                    // 場所1〜4
+                    ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
+                        const st = (places[p] && places[p].session) ? places[p].status : '未接続';
+                        document.getElementById('mgr-' + p).textContent = st;
+                    });
+
+                    // 出発信号（点灯・消灯）
+                    const depSignal = checkDepartureSignal(places);
+                    document.getElementById('mgr-出発信号').innerHTML = depSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
+
+                    // 接近（点灯・消灯）
+                    const approachSignal = (val.approachState === 'active');
+                    document.getElementById('mgr-接近').innerHTML = approachSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
                 }
             });
         }
 
-        // 受付リセット時は status は変更せず、resetEvent のみを送信
-        function triggerReset() {
-            let hasPreparing = false;
-            let hasEmergency = false;
-            for (let i = 1; i <= 6; i++) {
-                if (currentStatuses['場所'+i] === '準備中') hasPreparing = true;
-                if (currentStatuses['場所'+i] === '非常') hasEmergency = true;
-            }
+        // 出発信号の点灯判定（接続中のものがすべて準備完了）
+        function checkDepartureSignal(places) {
+            const targetPlaces = ['場所1', '場所2', '場所3', '場所4'];
+            let connectedCount = 0;
+            let readyCount = 0;
 
-            let msg = "";
-            if (hasEmergency && hasPreparing) msg = "非常の場所があります。また、準備中の場所もあります。本当によろしいですか。";
-            else if (hasEmergency) msg = "非常の場所があります。本当によろしいですか。";
-            else if (hasPreparing) msg = "準備中の場所があります。本当によろしいですか。";
-
-            if (msg !== "") {
-                if (!confirm(msg)) return;
-                if (hasEmergency) {
-                    if (!confirm("【最終確認】本当によろしいですか？")) return;
+            targetPlaces.forEach(p => {
+                if (places[p] && places[p].session) {
+                    connectedCount++;
+                    if (places[p].status === '準備完了') readyCount++;
                 }
+            });
+
+            return (connectedCount > 0 && connectedCount === readyCount);
+        }
+
+        // --- 受付：「案内」ボタン ---
+        function triggerGuide() {
+            const startData = allPlacesData['スタート'];
+            const startStatus = (startData && startData.session) ? startData.status : '未接続';
+
+            if (startStatus === '準備中') {
+                if (!confirm("スタート地点が準備中です。よろしいですか。")) return;
+            } else if (startStatus === '非常') {
+                if (!confirm("スタート地点が非常です。本当によろしいですか。")) return;
             }
 
             if (!database) return;
             database.ref().update({
-                'resetEvent': firebase.database.ServerValue.TIMESTAMP
+                'guideEvent': firebase.database.ServerValue.TIMESTAMP,
+                'guideState': 'active',
+                'approachState': 'off' // 接近を消灯
             });
         }
 
-        // --- 各場所画面の処理 ---
+        // --- スタート：「スタート」ボタン ---
+        function triggerStart() {
+            let hasPreparing = false;
+            let hasEmergency = false;
+
+            ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
+                if (allPlacesData[p] && allPlacesData[p].session) {
+                    if (allPlacesData[p].status === '準備中') hasPreparing = true;
+                    if (allPlacesData[p].status === '非常') hasEmergency = true;
+                }
+            });
+
+            if (hasEmergency) {
+                if (!confirm("非常の場所があります。よろしいですか。")) return;
+            } else if (hasPreparing) {
+                if (!confirm("準備中の場所があります。よろしいですか。")) return;
+            }
+
+            if (!database) return;
+            database.ref().update({
+                'startEvent': firebase.database.ServerValue.TIMESTAMP,
+                'startState': 'active',
+                'approachState': 'active', // 接近を点灯
+                'guideState': 'off'       // 管理者用案内表示をクリア
+            });
+        }
+
+        // --- 場所・スタート画面（操作端末） ---
         function setupClient() {
             if (!database) return;
-            
-            // 役割を変更するたびに、来客イベントの初期読み込みフラグをリセット
             isFirstLoad = true;
 
-            // ステータス監視
+            // ステータス同期
             statusRef = database.ref(`places/${currentRole}/status`);
             statusRef.on('value', snapshot => {
                 const status = snapshot.val() || '準備中';
@@ -436,35 +581,68 @@
                 if (sId && sId !== mySessionId) {
                     alert("別の端末がこの役割を選択したため、切断されました。");
                     currentRole = null;
-                    document.getElementById('screen-client').classList.remove('active');
+                    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
                     document.getElementById('app-header').style.display = 'none';
                     openSetup();
                 }
             });
 
-            // リセット（来客）イベント監視
-            resetEventRef = database.ref('resetEvent');
-            resetEventRef.on('value', snapshot => {
-                // 初回読み込み時はスルーする
-                if (isFirstLoad) { 
-                    isFirstLoad = false; 
-                    return; 
-                }
-                
-                const banner = document.getElementById('visitor-banner');
-                banner.classList.add('active'); // 帯を表示
-                
-                // 10秒後に帯を隠し、そのタイミングでステータスを「準備中」に書き戻す
-                setTimeout(() => {
-                    banner.classList.remove('active'); // 帯を隠す
-                    updateStatus('準備中'); // 消えたタイミングで「準備中」へ移行
-                }, 10000); 
+            // 案内（受付リセット）通知監視（スタート端末のみ）
+            if (currentRole === 'スタート') {
+                database.ref('guideEvent').on('value', snapshot => {
+                    if (isFirstLoad) return;
+                    showBanner('来客', 10000, null);
+                });
+            }
+
+            // スタートイベント監視（スタート & 場所1〜4端末）
+            database.ref('startEvent').on('value', snapshot => {
+                if (isFirstLoad) { isFirstLoad = false; return; }
+                showBanner('スタート', 20000, () => {
+                    // 20秒経過後に準備中にリセット
+                    updateStatus('準備中');
+                    if (currentRole === 'スタート') {
+                        database.ref('startState').set('off');
+                    }
+                });
             });
         }
 
+        function showBanner(text, durationMs, onComplete) {
+            const banner = document.getElementById('visitor-banner');
+            banner.textContent = text;
+            banner.classList.add('active');
+            
+            setTimeout(() => {
+                banner.classList.remove('active');
+                if (onComplete) onComplete();
+            }, durationMs);
+        }
+
         function updateStatus(newStatus) {
-            if (!database) return;
+            if (!database || !currentRole) return;
             database.ref(`places/${currentRole}`).update({ status: newStatus });
+        }
+
+        // --- 信号画面（出発信号・接近）---
+        function setupSignal() {
+            if (!database) return;
+            const signalScreen = document.getElementById('screen-signal');
+
+            if (currentRole === '出発信号') {
+                database.ref('places').on('value', snapshot => {
+                    const places = snapshot.val() || {};
+                    const isLightOn = checkDepartureSignal(places);
+                    if (isLightOn) signalScreen.classList.add('light-on');
+                    else signalScreen.classList.remove('light-on');
+                });
+            } else if (currentRole === '接近') {
+                database.ref('approachState').on('value', snapshot => {
+                    const state = snapshot.val();
+                    if (state === 'active') signalScreen.classList.add('light-on');
+                    else signalScreen.classList.remove('light-on');
+                });
+            }
         }
     </script>
 </body>
