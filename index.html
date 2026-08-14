@@ -35,7 +35,7 @@
             height: 70px;
             z-index: 10;
             position: relative;
-            overflow: hidden;   /* ヘッダーからはみ出た隠し画像を隠す */
+            /* overflow: hidden; は削除済み */
         }
         .role-display { font-size: 18px; font-weight: bold; }
         .btn-change-role {
@@ -802,20 +802,28 @@
             const randomChar = characters[Math.floor(Math.random() * characters.length)];
             const eggImg = document.getElementById('easter-egg-img');
             
-            // ランダムな画像をセットして上からスライドさせる（-15pxで帯の先頭にぴったり揃う）
-            eggImg.src = randomChar;
-            eggImg.style.top = '-15px';
-            
-            // 5秒後に上へスライドして消す（-85pxで完全に帯の上に隠れる）
-            setTimeout(() => {
-                eggImg.style.top = '-85px';
+            // 【修正点】画像の読み込みが完了してからスライドを開始する
+            eggImg.onload = () => {
+                // ランダムな画像をセットして上からスライドさせる（-15pxで帯の先頭にぴったり揃う）
+                eggImg.style.top = '-15px';
                 
-                // 上に完全に消え去るまで（0.4s）待ってからフラグを解除する
+                // 5秒後に上へスライドして消す（-85pxで完全に帯の上に隠れる）
                 setTimeout(() => {
-                    isEasterEggPlaying = false;
-                }, 400);
+                    eggImg.style.top = '-85px';
+                    
+                    // 上に完全に消え去るまで（0.4s）待ってからフラグを解除する
+                    setTimeout(() => {
+                        isEasterEggPlaying = false;
+                    }, 400);
+                    
+                }, 5000);
                 
-            }, 5000);
+                // 次回以降のためにonloadイベントを解除しておく
+                eggImg.onload = null;
+            };
+            
+            // srcを書き換えることで画像の読み込みを開始（完了後に↑のonloadが実行される）
+            eggImg.src = randomChar;
         }
     </script>
 </body>
