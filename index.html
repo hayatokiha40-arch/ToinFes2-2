@@ -27,7 +27,7 @@
         /* --- ヘッダー --- */
         .app-header {
             background-color: #1e1e1e;
-            padding: 15px 24px; /* 余計な隙間をなくして自然な配置に修正 */
+            padding: 15px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -47,9 +47,9 @@
         /* --- イースターエッグ画像 --- */
         #easter-egg-img {
             position: absolute;
-            top: -70px; /* 初期状態はヘッダーの上に隠す */
+            top: -85px; /* 親要素のpadding分を加味して完全に上に隠す */
             right: 100%; /* 「役割を変更」ボタンのすぐ左隣に配置 */
-            margin-right: 12px; /* ボタンとの間の自然な間隔 */
+            margin-right: 12px;
             width: 70px;
             height: 70px; /* 縦幅をヘッダー（帯）とピッタリ同じにする */
             object-fit: contain;
@@ -304,6 +304,7 @@
             measurementId: "G-HSFCX7T9J2"
         };
 
+        // 新しいパスワードのハッシュ値を適用
         const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
 
         async function sha256(plainText) {
@@ -747,6 +748,7 @@
         const konamiCode = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
         let konamiIndex = 0;
         let konamiTimer = null;
+        let isEasterEggPlaying = false; // アニメーション中の連続発動を防ぐフラグ
 
         document.addEventListener('keydown', (e) => {
             // 管理者または受付のときのみ有効
@@ -754,6 +756,9 @@
                 konamiIndex = 0;
                 return;
             }
+            
+            // アニメーション中は入力を受け付けない
+            if (isEasterEggPlaying) return;
 
             const key = e.key.toLowerCase();
             
@@ -791,17 +796,25 @@
         });
 
         function triggerEasterEgg() {
+            isEasterEggPlaying = true; // 演出スタート（追加入力をブロック）
+            
             const characters = ['Character1.png', 'Character2.png', 'Character3.png', 'Character4.png'];
             const randomChar = characters[Math.floor(Math.random() * characters.length)];
             const eggImg = document.getElementById('easter-egg-img');
             
-            // ランダムな画像をセットして上からスライドさせる
+            // ランダムな画像をセットして上からスライドさせる（-15pxで帯の先頭にぴったり揃う）
             eggImg.src = randomChar;
-            eggImg.style.top = '0px';
+            eggImg.style.top = '-15px';
             
-            // 5秒後に上へスライドして消す
+            // 5秒後に上へスライドして消す（-85pxで完全に帯の上に隠れる）
             setTimeout(() => {
-                eggImg.style.top = '-70px';
+                eggImg.style.top = '-85px';
+                
+                // 上に完全に消え去るまで（0.4s）待ってからフラグを解除する
+                setTimeout(() => {
+                    isEasterEggPlaying = false;
+                }, 400);
+                
             }, 5000);
         }
     </script>
