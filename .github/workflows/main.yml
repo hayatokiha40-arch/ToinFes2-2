@@ -1,0 +1,27 @@
+name: Sync README to Docs Repo
+
+on:
+  push:
+    branches:
+      - main # 元のリポジトリのメインブランチ名（masterならmasterに変更）
+    paths:
+      - 'README.md' # READMEが更新された時だけ実行
+
+jobs:
+  copy-file:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Repo
+        uses: actions/checkout@v4
+
+      - name: Pushes README to destination repository
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.SYNC_TOKEN }}
+        with:
+          source_file: 'README.md'
+          destination_repo: 'hayatokiha40-arch/README-ToinFes2-2' # 手順1で作ったリポジトリ名
+          destination_folder: '/'
+          user_email: 'hayato.kiha40@gmail.com' # ★あなたのGitHub登録メールアドレスに書き換えてください
+          user_name: 'hayatokiha40-arch'
+          commit_message: 'Update README from source repo'
