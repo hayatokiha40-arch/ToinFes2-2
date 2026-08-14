@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>桐陰祭136-2信号システム</title>
     
-    <!-- ファビコン設定 -->
-    <link rel="icon" href="Favicon.jpg" type="image/jpeg">
+    <!-- ファビコン設定（Imagesフォルダ内を参照） -->
+    <link rel="icon" href="Images/Favicon.jpg" type="image/jpeg">
 
     <!-- キャッシュ対策付きで外部SDKを読み込み -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js?v=1.0.0"></script>
@@ -35,7 +35,6 @@
             height: 70px;
             z-index: 10;
             position: relative;
-            /* overflow: hidden; は削除済み */
         }
         .role-display { font-size: 18px; font-weight: bold; }
         .btn-change-role {
@@ -233,9 +232,9 @@
 
     <!-- ヘッダー -->
     <div class="app-header" id="app-header" style="display: none;">
-        <!-- ファビコンと役割表示（Flexboxで横並び） -->
+        <!-- ファビコンと役割表示（Imagesフォルダ内を参照） -->
         <div style="display: flex; align-items: center; gap: 12px;">
-            <img src="Favicon.jpg" alt="Icon" style="height: 40px; width: 40px; border-radius: 6px;">
+            <img src="Images/Favicon.jpg" alt="Icon" style="height: 40px; width: 40px; border-radius: 6px;">
             <div>
                 <span style="color:#aaa; font-size:14px;">現在の役割: </span>
                 <span id="header-role-name" class="role-display">未設定</span>
@@ -304,7 +303,7 @@
             measurementId: "G-HSFCX7T9J2"
         };
 
-        // 新しいパスワードのハッシュ値を適用
+        // 管理者パスワードのハッシュ値
         const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
 
         async function sha256(plainText) {
@@ -333,7 +332,7 @@
         let isFirstLoad = true;
         let heartbeatInterval = null;
 
-        // Firebaseリスナー参照（クリーンアップ用）
+        // Firebaseリスナー参照
         let statusRef = null;
         let sessionRef = null;
         let guideEventRef = null;
@@ -748,44 +747,37 @@
         const konamiCode = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
         let konamiIndex = 0;
         let konamiTimer = null;
-        let isEasterEggPlaying = false; // アニメーション中の連続発動を防ぐフラグ
+        let isEasterEggPlaying = false; 
 
         document.addEventListener('keydown', (e) => {
-            // 管理者または受付のときのみ有効
             if (currentRole !== '管理者' && currentRole !== '受付') {
                 konamiIndex = 0;
                 return;
             }
             
-            // アニメーション中は入力を受け付けない
             if (isEasterEggPlaying) return;
 
             const key = e.key.toLowerCase();
             
-            // 正しい順序でキーが押されたか判定
             if (key === konamiCode[konamiIndex]) {
-                // 1文字目が入力されたら5秒間のタイマーをスタート
                 if (konamiIndex === 0) {
                     clearTimeout(konamiTimer);
                     konamiTimer = setTimeout(() => {
-                        konamiIndex = 0; // 5秒経過で入力リセット
+                        konamiIndex = 0;
                     }, 5000);
                 }
                 
                 konamiIndex++;
                 
-                // 最後まで入力成功した場合
                 if (konamiIndex === konamiCode.length) {
                     clearTimeout(konamiTimer);
                     konamiIndex = 0;
                     triggerEasterEgg();
                 }
             } else {
-                // 間違えた場合はリセット
                 konamiIndex = 0;
                 clearTimeout(konamiTimer);
                 
-                // 間違えたキーがたまたま最初のキー（上）だった場合は1文字目として再スタート
                 if (key === konamiCode[0]) {
                     konamiIndex = 1;
                     konamiTimer = setTimeout(() => {
@@ -796,33 +788,33 @@
         });
 
         function triggerEasterEgg() {
-            isEasterEggPlaying = true; // 演出スタート（追加入力をブロック）
+            isEasterEggPlaying = true;
             
-            const characters = ['Character1.png', 'Character2.png', 'Character3.png', 'Character4.png'];
+            // 【変更点】参照先を Images フォルダ内に設定
+            const characters = [
+                'Images/Character1.png', 
+                'Images/Character2.png', 
+                'Images/Character3.png', 
+                'Images/Character4.png'
+            ];
             const randomChar = characters[Math.floor(Math.random() * characters.length)];
             const eggImg = document.getElementById('easter-egg-img');
             
-            // 【修正点】画像の読み込みが完了してからスライドを開始する
             eggImg.onload = () => {
-                // ランダムな画像をセットして上からスライドさせる（-15pxで帯の先頭にぴったり揃う）
                 eggImg.style.top = '-15px';
                 
-                // 5秒後に上へスライドして消す（-85pxで完全に帯の上に隠れる）
                 setTimeout(() => {
                     eggImg.style.top = '-85px';
                     
-                    // 上に完全に消え去るまで（0.4s）待ってからフラグを解除する
                     setTimeout(() => {
                         isEasterEggPlaying = false;
                     }, 400);
                     
                 }, 5000);
                 
-                // 次回以降のためにonloadイベントを解除しておく
                 eggImg.onload = null;
             };
             
-            // srcを書き換えることで画像の読み込みを開始（完了後に↑のonloadが実行される）
             eggImg.src = randomChar;
         }
     </script>
