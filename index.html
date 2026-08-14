@@ -27,14 +27,14 @@
         /* --- ヘッダー --- */
         .app-header {
             background-color: #1e1e1e;
-            padding: 15px 90px 15px 24px; /* 右側に画像が降りてくるスペース(90px)を確保 */
+            padding: 15px 24px; /* 余計な隙間をなくして自然な配置に修正 */
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2d2d2d;
             height: 70px;
             z-index: 10;
-            position: relative; /* 隠し画像の基準位置として追加 */
+            position: relative;
             overflow: hidden;   /* ヘッダーからはみ出た隠し画像を隠す */
         }
         .role-display { font-size: 18px; font-weight: bold; }
@@ -48,9 +48,10 @@
         #easter-egg-img {
             position: absolute;
             top: -70px; /* 初期状態はヘッダーの上に隠す */
-            right: 10px; /* 役割変更ボタンの右側に配置 */
+            right: 100%; /* 「役割を変更」ボタンのすぐ左隣に配置 */
+            margin-right: 12px; /* ボタンとの間の自然な間隔 */
             width: 70px;
-            height: 70px; /* 縦幅を上の帯（ヘッダー）と全く同じにする */
+            height: 70px; /* 縦幅をヘッダー（帯）とピッタリ同じにする */
             object-fit: contain;
             transition: top 0.4s ease-out; /* スムーズな上下スライド */
             z-index: 20;
@@ -243,10 +244,11 @@
 
         <div id="header-action-space" style="flex: 1; display: flex; justify-content: center;"></div>
         
-        <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
-        
-        <!-- コナミコマンド用隠し画像 -->
-        <img id="easter-egg-img" src="" alt="Secret Character">
+        <!-- 右側領域（ボタンの左隣に隠し画像が上から降りてくる構成） -->
+        <div style="position: relative; display: flex; align-items: center; height: 100%;">
+            <img id="easter-egg-img" src="" alt="Secret Character">
+            <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
+        </div>
     </div>
 
     <!-- 通知帯 -->
