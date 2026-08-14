@@ -27,13 +27,15 @@
         /* --- ヘッダー --- */
         .app-header {
             background-color: #1e1e1e;
-            padding: 15px 24px;
+            padding: 15px 90px 15px 24px; /* 右側に画像が降りてくるスペース(90px)を確保 */
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #2d2d2d;
             height: 70px;
             z-index: 10;
+            position: relative; /* 隠し画像の基準位置として追加 */
+            overflow: hidden;   /* ヘッダーからはみ出た隠し画像を隠す */
         }
         .role-display { font-size: 18px; font-weight: bold; }
         .btn-change-role {
@@ -41,6 +43,18 @@
             padding: 8px 16px; font-size: 14px; border-radius: 6px; cursor: pointer;
         }
         .btn-change-role:hover { background-color: #666666; }
+
+        /* --- イースターエッグ画像 --- */
+        #easter-egg-img {
+            position: absolute;
+            top: -70px; /* 初期状態はヘッダーの上に隠す */
+            right: 10px; /* 役割変更ボタンの右側に配置 */
+            width: 70px;
+            height: 70px; /* 縦幅を上の帯（ヘッダー）と全く同じにする */
+            object-fit: contain;
+            transition: top 0.4s ease-out; /* スムーズな上下スライド */
+            z-index: 20;
+        }
 
         /* --- 通知用の横帯 --- */
         #visitor-banner {
@@ -218,12 +232,21 @@
 
     <!-- ヘッダー -->
     <div class="app-header" id="app-header" style="display: none;">
-        <div>
-            <span style="color:#aaa; font-size:14px;">現在の役割: </span>
-            <span id="header-role-name" class="role-display">未設定</span>
+        <!-- ファビコンと役割表示（Flexboxで横並び） -->
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <img src="Favicon.jpg" alt="Icon" style="height: 40px; width: 40px; border-radius: 6px;">
+            <div>
+                <span style="color:#aaa; font-size:14px;">現在の役割: </span>
+                <span id="header-role-name" class="role-display">未設定</span>
+            </div>
         </div>
-        <div id="header-action-space"></div>
+
+        <div id="header-action-space" style="flex: 1; display: flex; justify-content: center;"></div>
+        
         <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
+        
+        <!-- コナミコマンド用隠し画像 -->
+        <img id="easter-egg-img" src="" alt="Secret Character">
     </div>
 
     <!-- 通知帯 -->
@@ -279,7 +302,7 @@
             measurementId: "G-HSFCX7T9J2"
         };
 
-        const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
+        const MANAGER_PASSWORD_HASH = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
 
         async function sha256(plainText) {
             const encoder = new TextEncoder();
@@ -458,7 +481,6 @@
             return diff < 5000;
         }
 
-        // 場所1〜4のどこかに「非常」があるかチェックする共通関数
         function hasEmergencyStatus(places) {
             if (!places) return false;
             const targetPlaces = ['場所1', '場所2', '場所3', '場所4'];
@@ -715,6 +737,70 @@
                     }
                 });
             }
+        }
+
+        // ==========================================
+        // コナミコマンド（イースターエッグ）処理
+        // ==========================================
+        const konamiCode = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
+        let konamiIndex = 0;
+        let konamiTimer = null;
+
+        document.addEventListener('keydown', (e) => {
+            // 管理者または受付のときのみ有効
+            if (currentRole !== '管理者' && currentRole !== '受付') {
+                konamiIndex = 0;
+                return;
+            }
+
+            const key = e.key.toLowerCase();
+            
+            // 正しい順序でキーが押されたか判定
+            if (key === konamiCode[konamiIndex]) {
+                // 1文字目が入力されたら5秒間のタイマーをスタート
+                if (konamiIndex === 0) {
+                    clearTimeout(konamiTimer);
+                    konamiTimer = setTimeout(() => {
+                        konamiIndex = 0; // 5秒経過で入力リセット
+                    }, 5000);
+                }
+                
+                konamiIndex++;
+                
+                // 最後まで入力成功した場合
+                if (konamiIndex === konamiCode.length) {
+                    clearTimeout(konamiTimer);
+                    konamiIndex = 0;
+                    triggerEasterEgg();
+                }
+            } else {
+                // 間違えた場合はリセット
+                konamiIndex = 0;
+                clearTimeout(konamiTimer);
+                
+                // 間違えたキーがたまたま最初のキー（上）だった場合は1文字目として再スタート
+                if (key === konamiCode[0]) {
+                    konamiIndex = 1;
+                    konamiTimer = setTimeout(() => {
+                        konamiIndex = 0;
+                    }, 5000);
+                }
+            }
+        });
+
+        function triggerEasterEgg() {
+            const characters = ['Character1.png', 'Character2.png', 'Character3.png', 'Character4.png'];
+            const randomChar = characters[Math.floor(Math.random() * characters.length)];
+            const eggImg = document.getElementById('easter-egg-img');
+            
+            // ランダムな画像をセットして上からスライドさせる
+            eggImg.src = randomChar;
+            eggImg.style.top = '0px';
+            
+            // 5秒後に上へスライドして消す
+            setTimeout(() => {
+                eggImg.style.top = '-70px';
+            }, 5000);
         }
     </script>
 </body>
