@@ -149,7 +149,7 @@
         .status-ready { background-color: #0033cc; color: #ffffff; }
         
         /* 信号用ステータス色 */
-        .status-light-on { background-color: #ffaa77; color: #000000; }
+        .status-light-on { background-color: #ff865e; color: #000000; }
         .status-light-off { background-color: #1a1a1a; color: #888888; }
         
         .status-emergency { animation: urgent-blink 0.8s infinite steps(1); }
@@ -194,7 +194,7 @@
             width: 100%; height: calc(100vh - 70px);
             background-color: #121212; transition: background-color 0.3s;
         }
-        #screen-signal.light-on { background-color: #ffaa77 !important; } /* 白からオレンジに変更 */
+        #screen-signal.light-on { background-color: #ff865e !important; }
         #screen-signal.emergency-blink { animation: urgent-blink 0.8s infinite steps(1); }
 
         /* --- 5. 管理者画面 --- */
@@ -217,7 +217,7 @@
         .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
         
         /* 信号用バッジデザイン */
-        .box-light-on { background-color: #ffaa77; border: 2px solid #ffaa77; color: #000; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
+        .box-light-on { background-color: #ff865e; border: 2px solid #ff865e; color: #000; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
         .box-light-off { background-color: #121212; border: 2px solid #444; color: #888; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
 
         .mgr-badge { display: inline-block; padding: 8px 20px; border-radius: 6px; font-weight: bold; width: 80%; }
@@ -225,6 +225,21 @@
         .mgr-badge-ready { background-color: #0033cc; color: #ffffff; }
         .mgr-badge-emergency { background-color: #ff0000; color: #ffffff; }
         .mgr-badge-unconnected { background-color: #2a2a2a; color: #666666; }
+
+        /* 管理者用バッテリーバッジ */
+        .mgr-battery-badge {
+            display: inline-block;
+            border: 2px solid #ffffff;
+            border-radius: 6px;
+            padding: 4px 12px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #000;
+        }
+        .mgr-battery-badge.battery-low {
+            color: #ff3333;
+            border-color: #ff3333;
+        }
 
     </style>
 </head>
@@ -407,7 +422,9 @@
             if (selectedRole !== '受付' && selectedRole !== '管理者') {
                 database.ref('places/' + selectedRole).once('value').then(snapshot => {
                     const data = snapshot.val();
-                    if (data && data.session && selectedRole !== currentRole) {
+                    
+                    // 【修正】単にデータがあるかだけでなく、生存している（isDeviceConnected）かを判定する
+                    if (data && isDeviceConnected(data) && selectedRole !== currentRole) {
                         if (!confirm(`${selectedRole} はすでに他の端末で使用されています。\n強制的にこの端末に切り替えますか？`)) return;
                     }
                     
@@ -685,16 +702,15 @@
                         mgrApp.innerHTML = approachSignal ? '<span class="box-light-on">点灯</span>' : '<span class="box-light-off">消灯</span>';
                     }
 
-                    // バッテリー情報の更新
+                    // バッテリー情報の更新（管理者画面バッジ化）
                     ['スタート', '場所1', '場所2', '場所3', '場所4', '出発信号', '接近'].forEach(r => {
                         const battTd = document.getElementById('mgr-batt-' + r);
                         if (battTd) {
                             if (isDeviceConnected(places[r]) && places[r].battery !== undefined) {
-                                battTd.textContent = places[r].battery + '%';
-                                battTd.style.color = (places[r].battery <= 20) ? '#ff3333' : '#ffffff';
+                                const lowClass = (places[r].battery <= 20) ? ' battery-low' : '';
+                                battTd.innerHTML = `<span class="mgr-battery-badge${lowClass}">${places[r].battery}%</span>`;
                             } else {
-                                battTd.textContent = '-';
-                                battTd.style.color = '#666';
+                                battTd.innerHTML = '<span style="color:#666;">-</span>';
                             }
                         }
                     });
