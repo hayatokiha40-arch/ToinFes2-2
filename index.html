@@ -13,6 +13,11 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js?v=1.0.0"></script>
     
     <style>
+        :root {
+            /* ★信号の色を変更したい時は、ここのカラーコードだけを書き換えてください */
+            --signal-color: #ff6a00; 
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -148,8 +153,8 @@
         .status-preparing { background-color: #ffffff; color: #000000; }
         .status-ready { background-color: #0033cc; color: #ffffff; }
         
-        /* 信号用ステータス色 */
-        .status-light-on { background-color: #ff865e; color: #000000; }
+        /* 信号用ステータス色（変数を使用） */
+        .status-light-on { background-color: var(--signal-color); color: #000000; }
         .status-light-off { background-color: #1a1a1a; color: #888888; }
         
         .status-emergency { animation: urgent-blink 0.8s infinite steps(1); }
@@ -194,7 +199,8 @@
             width: 100%; height: calc(100vh - 70px);
             background-color: #121212; transition: background-color 0.3s;
         }
-        #screen-signal.light-on { background-color: #ff865e !important; }
+        /* 変数を使用 */
+        #screen-signal.light-on { background-color: var(--signal-color) !important; }
         #screen-signal.emergency-blink { animation: urgent-blink 0.8s infinite steps(1); }
 
         /* --- 5. 管理者画面 --- */
@@ -216,8 +222,8 @@
         
         .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
         
-        /* 信号用バッジデザイン */
-        .box-light-on { background-color: #ff865e; border: 2px solid #ff865e; color: #000; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
+        /* 信号用バッジデザイン（変数を使用） */
+        .box-light-on { background-color: var(--signal-color); border: 2px solid var(--signal-color); color: #000; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
         .box-light-off { background-color: #121212; border: 2px solid #444; color: #888; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
 
         .mgr-badge { display: inline-block; padding: 8px 20px; border-radius: 6px; font-weight: bold; width: 80%; }
@@ -363,9 +369,9 @@
         let allPlacesData = {};
         let isFirstLoad = true;
         let heartbeatInterval = null;
-        let systemBattery = null; // バッテリー残量保持用
+        let systemBattery = null;
 
-        // バッテリーAPIの初期化（非対応端末では無視される）
+        // バッテリーAPIの初期化
         if (navigator.getBattery) {
             navigator.getBattery().then(batt => {
                 systemBattery = Math.floor(batt.level * 100);
@@ -375,7 +381,6 @@
             }).catch(e => console.log("Battery API Error", e));
         }
 
-        // Firebaseリスナー参照
         let statusRef = null;
         let sessionRef = null;
         let guideEventRef = null;
@@ -423,7 +428,6 @@
                 database.ref('places/' + selectedRole).once('value').then(snapshot => {
                     const data = snapshot.val();
                     
-                    // 【修正】単にデータがあるかだけでなく、生存している（isDeviceConnected）かを判定する
                     if (data && isDeviceConnected(data) && selectedRole !== currentRole) {
                         if (!confirm(`${selectedRole} はすでに他の端末で使用されています。\n強制的にこの端末に切り替えますか？`)) return;
                     }
@@ -506,13 +510,13 @@
             if (!database || !currentRole || currentRole === '管理者' || currentRole === '受付') return;
 
             sendHeartbeat();
-            heartbeatInterval = setInterval(sendHeartbeat, 2000); // 2秒ごとに更新
+            heartbeatInterval = setInterval(sendHeartbeat, 2000); 
         }
 
         function sendHeartbeat() {
             if (!database || !currentRole) return;
             const payload = { lastSeen: firebase.database.ServerValue.TIMESTAMP };
-            if (systemBattery !== null) payload.battery = systemBattery; // ついでにバッテリーも送る
+            if (systemBattery !== null) payload.battery = systemBattery;
             database.ref(`places/${currentRole}`).update(payload);
         }
 
@@ -536,7 +540,6 @@
             return targetPlaces.some(p => isDeviceConnected(places[p]) && places[p].status === '非常');
         }
 
-        // 監視グリッドの生成（バッテリー表示枠を含む）
         function renderAdminGrid(keys) {
             const container = document.getElementById('admin-grid-container');
             container.innerHTML = '';
@@ -559,11 +562,9 @@
                 container.innerHTML += html;
             });
 
-            // 受付画面の場合、右下の6マス目を2分割して「出発信号」と「接近」を配置
             if (currentRole === '受付') {
                 container.innerHTML += `
                     <div class="status-cell" style="display: flex; flex-direction: row;">
-                        <!-- 左半分：出発信号 -->
                         <div style="flex: 1; border-right: 3px solid #333; display: flex; flex-direction: column;">
                             <div class="cell-header" style="font-size: 16px;">
                                 出発信号
@@ -571,7 +572,6 @@
                             </div>
                             <div class="cell-body status-unconnected" id="text-出発信号" style="font-size: 26px;">未接続</div>
                         </div>
-                        <!-- 右半分：接近 -->
                         <div style="flex: 1; display: flex; flex-direction: column;">
                             <div class="cell-header" style="font-size: 16px;">
                                 接近
@@ -619,7 +619,6 @@
                 const depSignal = checkDepartureSignal(places);
                 const approachSignal = (val.approachState === 'active');
 
-                // 通常の場所ステータス更新
                 ['スタート', '場所1', '場所2', '場所3', '場所4'].forEach(key => {
                     const cellBody = document.getElementById('text-' + key);
                     if (cellBody) {
@@ -635,7 +634,6 @@
                     updateBatteryDisplay('batt-' + key, places[key]);
                 });
 
-                // 受付画面の 6マス目（信号ステータス）更新
                 if (currentRole === '受付') {
                     const updateSignalCell = (key, isConn, isOn) => {
                         const el = document.getElementById('text-' + key);
@@ -662,7 +660,6 @@
                     updateBatteryDisplay('batt-接近', places['接近']);
                 }
 
-                // 管理者画面の更新
                 if (currentRole === '管理者') {
                     const mgrGuide = document.getElementById('mgr-受付');
                     mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
@@ -682,7 +679,6 @@
                         document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
                     });
 
-                    // 出発信号の表示（未接続対応）
                     const mgrDep = document.getElementById('mgr-出発信号');
                     if (!isDeviceConnected(places['出発信号'])) {
                         mgrDep.innerHTML = '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
@@ -692,7 +688,6 @@
                         mgrDep.innerHTML = depSignal ? '<span class="box-light-on">点灯</span>' : '<span class="box-light-off">消灯</span>';
                     }
 
-                    // 接近信号の表示（未接続対応）
                     const mgrApp = document.getElementById('mgr-接近');
                     if (!isDeviceConnected(places['接近'])) {
                         mgrApp.innerHTML = '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
@@ -702,7 +697,6 @@
                         mgrApp.innerHTML = approachSignal ? '<span class="box-light-on">点灯</span>' : '<span class="box-light-off">消灯</span>';
                     }
 
-                    // バッテリー情報の更新（管理者画面バッジ化）
                     ['スタート', '場所1', '場所2', '場所3', '場所4', '出発信号', '接近'].forEach(r => {
                         const battTd = document.getElementById('mgr-batt-' + r);
                         if (battTd) {
@@ -882,9 +876,6 @@
             }
         }
 
-        // ==========================================
-        // コナミコマンド（イースターエッグ）処理
-        // ==========================================
         const konamiCode = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
         let konamiIndex = 0;
         let konamiTimer = null;
