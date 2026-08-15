@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>桐陰祭136-2信号システム</title>
     
-    <!-- ファビコン設定（Imagesフォルダ内を参照） -->
+    <!-- ファビコン設定 -->
     <link rel="icon" href="Images/Favicon.jpg" type="image/jpeg">
 
     <!-- キャッシュ対策付きで外部SDKを読み込み -->
@@ -46,13 +46,13 @@
         /* --- イースターエッグ画像 --- */
         #easter-egg-img {
             position: absolute;
-            top: -85px; /* 親要素のpadding分を加味して完全に上に隠す */
-            right: 100%; /* 「役割を変更」ボタンのすぐ左隣に配置 */
+            top: -85px; 
+            right: 100%; 
             margin-right: 12px;
             width: 70px;
-            height: 70px; /* 縦幅をヘッダー（帯）とピッタリ同じにする */
+            height: 70px; 
             object-fit: contain;
-            transition: top 0.4s ease-out; /* スムーズな上下スライド */
+            transition: top 0.4s ease-out; 
             z-index: 20;
         }
 
@@ -84,7 +84,7 @@
         }
         .screen.active { display: flex; }
 
-        /* --- 1. セットアップ（役割選択）画面 --- */
+        /* --- 1. セットアップ画面 --- */
         #screen-setup {
             flex-direction: column; justify-content: center; align-items: center;
             background: #121212; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 100;
@@ -127,7 +127,18 @@
         .cell-header {
             background-color: #000; padding: 8px 0; text-align: center;
             font-size: 20px; font-weight: bold; border-bottom: 2px solid #333;
+            position: relative; /* バッテリーバッジの配置基準 */
         }
+        .battery-badge {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            border: 2px solid #ffffff; border-radius: 4px; padding: 2px 6px;
+            font-size: 14px; font-weight: bold; background-color: #000;
+            line-height: 1; display: none; /* 初期は非表示 */
+        }
+        .battery-low {
+            color: #ff3333 !important; border-color: #ff3333 !important;
+        }
+
         .cell-body {
             flex: 1; display: flex; justify-content: center; align-items: center;
             font-size: 40px; font-weight: bold;
@@ -136,6 +147,11 @@
         .status-unconnected { background-color: #2a2a2a; color: #666666; }
         .status-preparing { background-color: #ffffff; color: #000000; }
         .status-ready { background-color: #0033cc; color: #ffffff; }
+        
+        /* 信号用ステータス色 */
+        .status-light-on { background-color: #ffaa77; color: #000000; }
+        .status-light-off { background-color: #1a1a1a; color: #888888; }
+        
         .status-emergency { animation: urgent-blink 0.8s infinite steps(1); }
         @keyframes urgent-blink {
             0%, 75% { background-color: #ff0000; color: #ffffff; }
@@ -178,7 +194,7 @@
             width: 100%; height: calc(100vh - 70px);
             background-color: #121212; transition: background-color 0.3s;
         }
-        #screen-signal.light-on { background-color: #ffffff !important; }
+        #screen-signal.light-on { background-color: #ffaa77 !important; } /* 白からオレンジに変更 */
         #screen-signal.emergency-blink { animation: urgent-blink 0.8s infinite steps(1); }
 
         /* --- 5. 管理者画面 --- */
@@ -187,17 +203,22 @@
             overflow-y: auto;
         }
         .manager-table {
-            width: 100%; max-width: 800px; border-collapse: collapse; margin-top: 20px;
+            width: 100%; max-width: 900px; border-collapse: collapse; margin-top: 20px;
         }
         .manager-table th, .manager-table td {
             border: 2px solid #444; padding: 15px; text-align: center; font-size: 22px; font-weight: bold;
         }
-        .manager-table th { background-color: #222; width: 40%; }
+        .manager-table th { background-color: #222; }
+        .manager-table th:nth-child(1) { width: 35%; }
+        .manager-table th:nth-child(2) { width: 45%; }
+        .manager-table th:nth-child(3) { width: 20%; }
         .manager-table td { background-color: #1a1a1a; }
         
         .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
-        .box-light-on { background-color: #ffffff; border: 2px solid #ffffff; height: 40px; width: 100%; display: block; }
-        .box-light-off { background-color: #121212; border: 2px solid #444; height: 40px; width: 100%; display: block; }
+        
+        /* 信号用バッジデザイン */
+        .box-light-on { background-color: #ffaa77; border: 2px solid #ffaa77; color: #000; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
+        .box-light-off { background-color: #121212; border: 2px solid #444; color: #888; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
 
         .mgr-badge { display: inline-block; padding: 8px 20px; border-radius: 6px; font-weight: bold; width: 80%; }
         .mgr-badge-preparing { background-color: #ffffff; color: #000000; }
@@ -232,7 +253,6 @@
 
     <!-- ヘッダー -->
     <div class="app-header" id="app-header" style="display: none;">
-        <!-- ファビコンと役割表示（Imagesフォルダ内を参照） -->
         <div style="display: flex; align-items: center; gap: 12px;">
             <img src="Images/Favicon.jpg" alt="Icon" style="height: 40px; width: 40px; border-radius: 6px;">
             <div>
@@ -243,7 +263,6 @@
 
         <div id="header-action-space" style="flex: 1; display: flex; justify-content: center;"></div>
         
-        <!-- 右側領域（ボタンの左隣に隠し画像が上から降りてくる構成） -->
         <div style="position: relative; display: flex; align-items: center; height: 100%;">
             <img id="easter-egg-img" src="" alt="Secret Character">
             <button class="btn-change-role" onclick="openSetup()">役割を変更</button>
@@ -275,17 +294,17 @@
         <h2 style="font-size:28px; margin-bottom:10px;">全体状況監視（管理者）</h2>
         <table class="manager-table">
             <thead>
-                <tr><th>役割</th><th>現在の状態</th></tr>
+                <tr><th>役割</th><th>現在の状態</th><th>バッテリ</th></tr>
             </thead>
             <tbody>
-                <tr><td>受付</td><td id="mgr-受付">-</td></tr>
-                <tr><td>スタート</td><td id="mgr-スタート">-</td></tr>
-                <tr><td>場所 1</td><td id="mgr-場所1">-</td></tr>
-                <tr><td>場所 2</td><td id="mgr-場所2">-</td></tr>
-                <tr><td>場所 3</td><td id="mgr-場所3">-</td></tr>
-                <tr><td>場所 4</td><td id="mgr-場所4">-</td></tr>
-                <tr><td>出発信号</td><td id="mgr-出発信号">-</td></tr>
-                <tr><td>接近</td><td id="mgr-接近">-</td></tr>
+                <tr><td>受付</td><td id="mgr-受付">-</td><td id="mgr-batt-受付">-</td></tr>
+                <tr><td>スタート</td><td id="mgr-スタート">-</td><td id="mgr-batt-スタート">-</td></tr>
+                <tr><td>場所 1</td><td id="mgr-場所1">-</td><td id="mgr-batt-場所1">-</td></tr>
+                <tr><td>場所 2</td><td id="mgr-場所2">-</td><td id="mgr-batt-場所2">-</td></tr>
+                <tr><td>場所 3</td><td id="mgr-場所3">-</td><td id="mgr-batt-場所3">-</td></tr>
+                <tr><td>場所 4</td><td id="mgr-場所4">-</td><td id="mgr-batt-場所4">-</td></tr>
+                <tr><td>出発信号</td><td id="mgr-出発信号">-</td><td id="mgr-batt-出発信号">-</td></tr>
+                <tr><td>接近</td><td id="mgr-接近">-</td><td id="mgr-batt-接近">-</td></tr>
             </tbody>
         </table>
     </div>
@@ -303,7 +322,6 @@
             measurementId: "G-HSFCX7T9J2"
         };
 
-        // 管理者パスワードのハッシュ値
         const MANAGER_PASSWORD_HASH = "6b9353877cc7295161c22ed3117dbb2826ca2bb49a63043974ee4aa785549573";
 
         async function sha256(plainText) {
@@ -320,7 +338,6 @@
         if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
             firebase.initializeApp(firebaseConfig);
             database = firebase.database();
-
             database.ref('.info/serverTimeOffset').on('value', snap => {
                 serverTimeOffset = snap.val() || 0;
             });
@@ -331,6 +348,17 @@
         let allPlacesData = {};
         let isFirstLoad = true;
         let heartbeatInterval = null;
+        let systemBattery = null; // バッテリー残量保持用
+
+        // バッテリーAPIの初期化（非対応端末では無視される）
+        if (navigator.getBattery) {
+            navigator.getBattery().then(batt => {
+                systemBattery = Math.floor(batt.level * 100);
+                batt.addEventListener('levelchange', () => {
+                    systemBattery = Math.floor(batt.level * 100);
+                });
+            }).catch(e => console.log("Battery API Error", e));
+        }
 
         // Firebaseリスナー参照
         let statusRef = null;
@@ -391,6 +419,8 @@
                         session: mySessionId,
                         lastSeen: firebase.database.ServerValue.TIMESTAMP
                     };
+                    if (systemBattery !== null) initData.battery = systemBattery;
+
                     if (['スタート', '場所1', '場所2', '場所3', '場所4'].includes(currentRole)) {
                         initData.status = '準備中';
                     }
@@ -456,17 +486,17 @@
 
         function startHeartbeat() {
             stopHeartbeat();
-            if (!database || !currentRole) return;
+            if (!database || !currentRole || currentRole === '管理者' || currentRole === '受付') return;
 
             sendHeartbeat();
-            heartbeatInterval = setInterval(sendHeartbeat, 2000);
+            heartbeatInterval = setInterval(sendHeartbeat, 2000); // 2秒ごとに更新
         }
 
         function sendHeartbeat() {
             if (!database || !currentRole) return;
-            database.ref(`places/${currentRole}`).update({
-                lastSeen: firebase.database.ServerValue.TIMESTAMP
-            });
+            const payload = { lastSeen: firebase.database.ServerValue.TIMESTAMP };
+            if (systemBattery !== null) payload.battery = systemBattery; // ついでにバッテリーも送る
+            database.ref(`places/${currentRole}`).update(payload);
         }
 
         function stopHeartbeat() {
@@ -489,29 +519,68 @@
             return targetPlaces.some(p => isDeviceConnected(places[p]) && places[p].status === '非常');
         }
 
+        // 監視グリッドの生成（バッテリー表示枠を含む）
         function renderAdminGrid(keys) {
             const container = document.getElementById('admin-grid-container');
             container.innerHTML = '';
             
-            if (keys.length <= 4) {
-                container.style.gridTemplateColumns = 'repeat(2, 1fr)';
-                container.style.gridTemplateRows = 'repeat(2, 1fr)';
-            } else {
-                container.style.gridTemplateColumns = 'repeat(3, 1fr)';
-                container.style.gridTemplateRows = 'repeat(2, 1fr)';
-            }
+            container.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            container.style.gridTemplateRows = 'repeat(2, 1fr)';
 
             keys.forEach(key => {
                 const isStart = (key === 'スタート');
                 const borderClass = (currentRole === '受付' && isStart) ? 'border-red' : '';
                 const html = `
                     <div class="status-cell ${borderClass}" id="cell-${key}">
-                        <div class="cell-header">${key}</div>
+                        <div class="cell-header">
+                            ${key}
+                            <div class="battery-badge" id="batt-${key}"></div>
+                        </div>
                         <div class="cell-body status-unconnected" id="text-${key}">未接続</div>
                     </div>
                 `;
                 container.innerHTML += html;
             });
+
+            // 受付画面の場合、右下の6マス目を2分割して「出発信号」と「接近」を配置
+            if (currentRole === '受付') {
+                container.innerHTML += `
+                    <div class="status-cell" style="display: flex; flex-direction: row;">
+                        <!-- 左半分：出発信号 -->
+                        <div style="flex: 1; border-right: 3px solid #333; display: flex; flex-direction: column;">
+                            <div class="cell-header" style="font-size: 16px;">
+                                出発信号
+                                <div class="battery-badge" id="batt-出発信号" style="right: 4px; padding: 1px 4px; font-size: 12px;"></div>
+                            </div>
+                            <div class="cell-body status-unconnected" id="text-出発信号" style="font-size: 26px;">未接続</div>
+                        </div>
+                        <!-- 右半分：接近 -->
+                        <div style="flex: 1; display: flex; flex-direction: column;">
+                            <div class="cell-header" style="font-size: 16px;">
+                                接近
+                                <div class="battery-badge" id="batt-接近" style="right: 4px; padding: 1px 4px; font-size: 12px;"></div>
+                            </div>
+                            <div class="cell-body status-unconnected" id="text-接近" style="font-size: 26px;">未接続</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function updateBatteryDisplay(elementId, placeData) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            if (isDeviceConnected(placeData) && placeData.battery !== undefined) {
+                el.textContent = placeData.battery + '%';
+                el.style.display = 'block';
+                if (placeData.battery <= 20) {
+                    el.classList.add('battery-low');
+                } else {
+                    el.classList.remove('battery-low');
+                }
+            } else {
+                el.style.display = 'none';
+            }
         }
 
         function getManagerStatusBadge(status) {
@@ -529,6 +598,11 @@
                 const places = val.places || {};
                 allPlacesData = places;
 
+                const isEmergency = hasEmergencyStatus(places);
+                const depSignal = checkDepartureSignal(places);
+                const approachSignal = (val.approachState === 'active');
+
+                // 通常の場所ステータス更新
                 ['スタート', '場所1', '場所2', '場所3', '場所4'].forEach(key => {
                     const cellBody = document.getElementById('text-' + key);
                     if (cellBody) {
@@ -541,8 +615,37 @@
                         else if (status === '準備完了') cellBody.classList.add('status-ready');
                         else if (status === '非常') cellBody.classList.add('status-emergency');
                     }
+                    updateBatteryDisplay('batt-' + key, places[key]);
                 });
 
+                // 受付画面の 6マス目（信号ステータス）更新
+                if (currentRole === '受付') {
+                    const updateSignalCell = (key, isConn, isOn) => {
+                        const el = document.getElementById('text-' + key);
+                        if (!el) return;
+                        el.className = 'cell-body';
+                        if (!isConn) {
+                            el.textContent = '未接続';
+                            el.classList.add('status-unconnected');
+                        } else if (isEmergency) {
+                            el.textContent = '非常';
+                            el.classList.add('status-emergency');
+                        } else if (isOn) {
+                            el.textContent = '点灯';
+                            el.classList.add('status-light-on');
+                        } else {
+                            el.textContent = '消灯';
+                            el.classList.add('status-light-off');
+                        }
+                    };
+                    
+                    updateSignalCell('出発信号', isDeviceConnected(places['出発信号']), depSignal);
+                    updateSignalCell('接近', isDeviceConnected(places['接近']), approachSignal);
+                    updateBatteryDisplay('batt-出発信号', places['出発信号']);
+                    updateBatteryDisplay('batt-接近', places['接近']);
+                }
+
+                // 管理者画面の更新
                 if (currentRole === '管理者') {
                     const mgrGuide = document.getElementById('mgr-受付');
                     mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
@@ -562,17 +665,39 @@
                         document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
                     });
 
-                    const isEmergency = hasEmergencyStatus(places);
-                    if (isEmergency) {
-                        document.getElementById('mgr-出発信号').innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
-                        document.getElementById('mgr-接近').innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+                    // 出発信号の表示（未接続対応）
+                    const mgrDep = document.getElementById('mgr-出発信号');
+                    if (!isDeviceConnected(places['出発信号'])) {
+                        mgrDep.innerHTML = '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
+                    } else if (isEmergency) {
+                        mgrDep.innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
                     } else {
-                        const depSignal = checkDepartureSignal(places);
-                        document.getElementById('mgr-出発信号').innerHTML = depSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
-
-                        const approachSignal = (val.approachState === 'active');
-                        document.getElementById('mgr-接近').innerHTML = approachSignal ? '<span class="box-light-on"></span>' : '<span class="box-light-off"></span>';
+                        mgrDep.innerHTML = depSignal ? '<span class="box-light-on">点灯</span>' : '<span class="box-light-off">消灯</span>';
                     }
+
+                    // 接近信号の表示（未接続対応）
+                    const mgrApp = document.getElementById('mgr-接近');
+                    if (!isDeviceConnected(places['接近'])) {
+                        mgrApp.innerHTML = '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
+                    } else if (isEmergency) {
+                        mgrApp.innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+                    } else {
+                        mgrApp.innerHTML = approachSignal ? '<span class="box-light-on">点灯</span>' : '<span class="box-light-off">消灯</span>';
+                    }
+
+                    // バッテリー情報の更新
+                    ['スタート', '場所1', '場所2', '場所3', '場所4', '出発信号', '接近'].forEach(r => {
+                        const battTd = document.getElementById('mgr-batt-' + r);
+                        if (battTd) {
+                            if (isDeviceConnected(places[r]) && places[r].battery !== undefined) {
+                                battTd.textContent = places[r].battery + '%';
+                                battTd.style.color = (places[r].battery <= 20) ? '#ff3333' : '#ffffff';
+                            } else {
+                                battTd.textContent = '-';
+                                battTd.style.color = '#666';
+                            }
+                        }
+                    });
                 }
             });
         }
@@ -790,7 +915,6 @@
         function triggerEasterEgg() {
             isEasterEggPlaying = true;
             
-            // 【変更点】参照先を Images フォルダ内に設定
             const characters = [
                 'Images/Character1.png', 
                 'Images/Character2.png', 
