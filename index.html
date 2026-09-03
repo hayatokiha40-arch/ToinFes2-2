@@ -209,15 +209,16 @@
             overflow-y: auto;
         }
         .manager-table {
-            width: 100%; max-width: 900px; border-collapse: collapse; margin-top: 20px;
+            width: 100%; max-width: 1000px; border-collapse: collapse; margin-top: 20px;
         }
         .manager-table th, .manager-table td {
-            border: 2px solid #444; padding: 15px; text-align: center; font-size: 22px; font-weight: bold;
+            border: 2px solid #444; padding: 15px; text-align: center; font-size: 20px; font-weight: bold;
         }
         .manager-table th { background-color: #222; }
-        .manager-table th:nth-child(1) { width: 35%; }
-        .manager-table th:nth-child(2) { width: 45%; }
+        .manager-table th:nth-child(1) { width: 25%; }
+        .manager-table th:nth-child(2) { width: 35%; }
         .manager-table th:nth-child(3) { width: 20%; }
+        .manager-table th:nth-child(4) { width: 20%; }
         .manager-table td { background-color: #1a1a1a; }
         
         .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
@@ -246,6 +247,15 @@
             color: #ff3333;
             border-color: #ff3333;
         }
+
+        /* 追放ボタン */
+        .btn-evict {
+            background-color: #ff3333; color: white; border: none;
+            padding: 8px 16px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer;
+            width: 100%;
+        }
+        .btn-evict:hover { background-color: #cc0000; }
+        .btn-evict:disabled { background-color: #555; color: #888; cursor: not-allowed; }
 
     </style>
 </head>
@@ -315,17 +325,17 @@
         <h2 style="font-size:28px; margin-bottom:10px;">全体状況監視（管理者）</h2>
         <table class="manager-table">
             <thead>
-                <tr><th>役割</th><th>現在の状態</th><th>バッテリ</th></tr>
+                <tr><th>役割</th><th>現在の状態</th><th>バッテリ</th><th>操作</th></tr>
             </thead>
             <tbody>
-                <tr><td>受付</td><td id="mgr-受付">-</td><td id="mgr-batt-受付">-</td></tr>
-                <tr><td>スタート</td><td id="mgr-スタート">-</td><td id="mgr-batt-スタート">-</td></tr>
-                <tr><td>場所 1</td><td id="mgr-場所1">-</td><td id="mgr-batt-場所1">-</td></tr>
-                <tr><td>場所 2</td><td id="mgr-場所2">-</td><td id="mgr-batt-場所2">-</td></tr>
-                <tr><td>場所 3</td><td id="mgr-場所3">-</td><td id="mgr-batt-場所3">-</td></tr>
-                <tr><td>場所 4</td><td id="mgr-場所4">-</td><td id="mgr-batt-場所4">-</td></tr>
-                <tr><td>出発信号</td><td id="mgr-出発信号">-</td><td id="mgr-batt-出発信号">-</td></tr>
-                <tr><td>接近</td><td id="mgr-接近">-</td><td id="mgr-batt-接近">-</td></tr>
+                <tr><td>受付</td><td id="mgr-受付">-</td><td id="mgr-batt-受付">-</td><td>-</td></tr>
+                <tr><td>スタート</td><td id="mgr-スタート">-</td><td id="mgr-batt-スタート">-</td><td>-</td></tr>
+                <tr><td>場所 1</td><td id="mgr-場所1">-</td><td id="mgr-batt-場所1">-</td><td id="mgr-action-場所1"></td></tr>
+                <tr><td>場所 2</td><td id="mgr-場所2">-</td><td id="mgr-batt-場所2">-</td><td id="mgr-action-場所2"></td></tr>
+                <tr><td>場所 3</td><td id="mgr-場所3">-</td><td id="mgr-batt-場所3">-</td><td id="mgr-action-場所3"></td></tr>
+                <tr><td>場所 4</td><td id="mgr-場所4">-</td><td id="mgr-batt-場所4">-</td><td id="mgr-action-場所4"></td></tr>
+                <tr><td>出発信号</td><td id="mgr-出発信号">-</td><td id="mgr-batt-出発信号">-</td><td>-</td></tr>
+                <tr><td>接近</td><td id="mgr-接近">-</td><td id="mgr-batt-接近">-</td><td>-</td></tr>
             </tbody>
         </table>
     </div>
@@ -673,10 +683,18 @@
                         mgrStart.innerHTML = getManagerStatusBadge(st);
                     }
 
+                    // 場所1〜4の状況と「追放」ボタンの更新
                     ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
                         const isConnected = isDeviceConnected(places[p]);
                         const st = isConnected ? places[p].status : '未接続';
                         document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
+                        
+                        const actionTd = document.getElementById('mgr-action-' + p);
+                        if (actionTd) {
+                            // 未接続の場合はボタンをグレーアウト（無効化）する
+                            const disabledAttr = !isConnected ? 'disabled' : '';
+                            actionTd.innerHTML = `<button class="btn-evict" onclick="evictPlace('${p}')" ${disabledAttr}>追放</button>`;
+                        }
                     });
 
                     const mgrDep = document.getElementById('mgr-出発信号');
@@ -771,6 +789,15 @@
             });
         }
 
+        // --- 管理者からの強制追放処理 ---
+        function evictPlace(role) {
+            if (!confirm(`${role} を追放（強制切断）しますか？\n対象の端末は強制的に初期画面に戻ります。`)) return;
+            if (database) {
+                // Firebaseからその場所のデータを丸ごと削除
+                database.ref('places/' + role).remove();
+            }
+        }
+
         function setupClient() {
             if (!database) return;
             isFirstLoad = true;
@@ -787,8 +814,10 @@
             sessionRef = database.ref(`places/${currentRole}/session`);
             sessionRef.on('value', snapshot => {
                 const sId = snapshot.val();
-                if (sId && sId !== mySessionId) {
-                    alert("別の端末がこの役割を選択したため、切断されました。");
+                
+                // 自分のセッションIDと異なる場合（別の人が上書きした or 管理者が削除してnullになった場合）
+                if (sId !== mySessionId) {
+                    alert("管理者から追放されたか、別の端末がこの役割を選択したため、切断されました。");
                     currentRole = null;
                     stopHeartbeat();
                     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
