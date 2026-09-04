@@ -132,13 +132,13 @@
         .cell-header {
             background-color: #000; padding: 8px 0; text-align: center;
             font-size: 20px; font-weight: bold; border-bottom: 2px solid #333;
-            position: relative; 
+            position: relative; /* バッテリーバッジの配置基準 */
         }
         .battery-badge {
             position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
             border: 2px solid #ffffff; border-radius: 4px; padding: 2px 6px;
             font-size: 14px; font-weight: bold; background-color: #000;
-            line-height: 1; display: none; 
+            line-height: 1; display: none; /* 初期は非表示 */
         }
         .battery-low {
             color: #ff3333 !important; border-color: #ff3333 !important;
@@ -153,7 +153,7 @@
         .status-preparing { background-color: #ffffff; color: #000000; }
         .status-ready { background-color: #0033cc; color: #ffffff; }
         
-        /* 信号用ステータス色 */
+        /* 信号用ステータス色（変数を使用） */
         .status-light-on { background-color: var(--signal-color); color: #000000; }
         .status-light-off { background-color: #1a1a1a; color: #888888; }
         
@@ -199,6 +199,7 @@
             width: 100%; height: calc(100vh - 70px);
             background-color: #121212; transition: background-color 0.3s;
         }
+        /* 変数を使用 */
         #screen-signal.light-on { background-color: var(--signal-color) !important; }
         #screen-signal.emergency-blink { animation: urgent-blink 0.8s infinite steps(1); }
 
@@ -222,6 +223,7 @@
         
         .badge-blue { background-color: #0033cc; color: #fff; padding: 8px 20px; border-radius: 6px; display: inline-block; }
         
+        /* 信号用バッジデザイン（変数を使用） */
         .box-light-on { background-color: var(--signal-color); border: 2px solid var(--signal-color); color: #000; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
         .box-light-off { background-color: #121212; border: 2px solid #444; color: #888; padding: 8px 0; border-radius: 6px; display: block; width: 100%; }
 
@@ -231,6 +233,7 @@
         .mgr-badge-emergency { background-color: #ff0000; color: #ffffff; }
         .mgr-badge-unconnected { background-color: #2a2a2a; color: #666666; }
 
+        /* 管理者用バッテリーバッジ */
         .mgr-battery-badge {
             display: inline-block;
             border: 2px solid #ffffff;
@@ -245,6 +248,7 @@
             border-color: #ff3333;
         }
 
+        /* 追放ボタン */
         .btn-evict {
             background-color: #ff3333; color: white; border: none;
             padding: 8px 16px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer;
@@ -306,7 +310,7 @@
         </div>
     </div>
 
-    <!-- クライアント画面（場所1〜4） -->
+    <!-- クライアント画面（場所1〜4・スタートボタン操作用） -->
     <div id="screen-client" class="screen">
         <div class="client-btn btn-preparing active" id="btn-status-preparing" onclick="updateStatus('準備中')">準備中</div>
         <div class="client-btn btn-ready" id="btn-status-ready" onclick="updateStatus('準備完了')">準備完了</div>
@@ -374,530 +378,605 @@
         let mySessionId = null;
         let allPlacesData = {};
         let isFirstLoad = true;
-        let myBatteryLevel = null;
-        
-        let approachSignalState = false; 
+        let heartbeatInterval = null;
+        let systemBattery = null;
 
-        const EXCLUDED_ROLES = ["受付", "スタート", "出発信号", "接近", "管理者"];
-
-        // 画面消灯防止機能
-        let wakeLock = null;
-        async function requestWakeLock() {
-            if ('wakeLock' in navigator) {
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                } catch (err) {
-                    console.error(`Wake Lock エラー: ${err.name}, ${err.message}`);
-                }
-            }
-        }
-
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                requestWakeLock();
-            }
-        });
-
-        function getServerTime() { return Date.now() + serverTimeOffset; }
-
-        function generateSessionId() {
-            return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-        }
-
-        const characters = ["Chino.png", "Chiya.png", "Cocoa.png", "Maya.png", "Megu.png", "Rize.png", "Syaro.png"];
-        function changeEasterEgg() {
-            const img = document.getElementById("easter-egg-img");
-            const randomChar = characters[Math.floor(Math.random() * characters.length)];
-            img.src = `Images/${randomChar}`;
-            img.style.top = "0px"; 
-            setTimeout(() => { img.style.top = "-85px"; }, 1500);
-        }
-
-        async function initBatteryStatus() {
-            if ('getBattery' in navigator) {
-                try {
-                    const battery = await navigator.getBattery();
-                    const updateBattery = () => {
-                        myBatteryLevel = Math.floor(battery.level * 100);
-                        if (currentRole && mySessionId) {
-                            database.ref(`status/${currentRole}/battery`).set(myBatteryLevel);
-                        }
-                    };
-                    updateBattery();
-                    battery.addEventListener('levelchange', updateBattery);
-                } catch (e) {
-                    console.error("Battery API Error:", e);
-                }
-            }
-        }
-
-        async function startApp() {
-            const selected = document.getElementById("role-select").value;
-            if (!selected) { alert("役割を選択してください"); return; }
-            if (!database) { alert("Firebaseの設定がされていません。"); return; }
-
-            if (selected === "管理者") {
-                const pass = prompt("管理者用パスワードを入力してください");
-                if (!pass) return;
-                const hash = await sha256(pass);
-                if (hash !== MANAGER_PASSWORD_HASH) {
-                    alert("パスワードが違います");
-                    return;
-                }
-            }
-
-            const snapshot = await database.ref(`status/${selected}`).once('value');
-            const data = snapshot.val();
-            
-            if (data && data.sessionId) {
-                const isAlive = (getServerTime() - data.lastSeen) < 15000;
-                if (isAlive) {
-                    alert(`「${selected}」は現在別の端末で使用されています。\n（15秒ほど待つか、管理者に追放してもらってください）`);
-                    return;
-                }
-            }
-
-            if (currentRole && currentRole !== selected) {
-                database.ref(`status/${currentRole}`).remove();
-                if (heartbeatInterval) clearInterval(heartbeatInterval);
-            }
-
-            currentRole = selected;
-            mySessionId = generateSessionId();
-
-            if (EXCLUDED_ROLES.includes(currentRole)) {
-                await database.ref(`status/${currentRole}`).set({
-                    sessionId: mySessionId,
-                    lastSeen: getServerTime(),
-                    battery: myBatteryLevel
+        // バッテリーAPIの初期化
+        if (navigator.getBattery) {
+            navigator.getBattery().then(batt => {
+                systemBattery = Math.floor(batt.level * 100);
+                batt.addEventListener('levelchange', () => {
+                    systemBattery = Math.floor(batt.level * 100);
                 });
-            } else {
-                await database.ref(`status/${currentRole}`).set({
-                    sessionId: mySessionId,
-                    state: "準備中",
-                    lastSeen: getServerTime(),
-                    battery: myBatteryLevel
-                });
-            }
-
-            proceedToMainScreen();
+            }).catch(e => console.log("Battery API Error", e));
         }
 
-        let heartbeatInterval;
-        function proceedToMainScreen() {
-            document.getElementById("screen-setup").classList.remove("active");
-            document.getElementById("app-header").style.display = "flex";
-            document.getElementById("header-role-name").innerText = currentRole;
-            document.getElementById("btn-cancel-setup").style.display = "block";
-
-            requestWakeLock();
-
-            document.querySelectorAll(".screen:not(#screen-setup)").forEach(el => el.classList.remove("active"));
-
-            if (heartbeatInterval) clearInterval(heartbeatInterval);
-            heartbeatInterval = setInterval(() => {
-                if (currentRole && mySessionId) {
-                    database.ref(`status/${currentRole}`).update({ lastSeen: getServerTime() });
-                }
-            }, 10000);
-
-            if (currentRole === "管理者") {
-                document.getElementById("screen-manager").classList.add("active");
-                setupManagerScreen();
-            }
-            else if (currentRole === "受付" || currentRole === "スタート") {
-                document.getElementById("screen-admin").classList.add("active");
-                setupAdminScreen();
-            } 
-            else if (currentRole === "出発信号" || currentRole === "接近") {
-                document.getElementById("screen-signal").classList.add("active");
-                setupSignalScreen();
-            } 
-            else {
-                document.getElementById("screen-client").classList.add("active");
-                setupClientScreen();
-            }
-
-            if (isFirstLoad) {
-                database.ref('status').on('value', (snapshot) => {
-                    allPlacesData = snapshot.val() || {};
-                    const currentTime = getServerTime();
-
-                    if (currentRole && allPlacesData[currentRole]) {
-                        if (allPlacesData[currentRole].sessionId !== mySessionId) {
-                            alert("別の端末がこの役割にログインしたか、管理者から追放されました。");
-                            location.reload();
-                            return;
-                        }
-                    }
-
-                    for (const role in allPlacesData) {
-                        const data = allPlacesData[role];
-                        if (data.lastSeen && (currentTime - data.lastSeen > 20000)) {
-                            allPlacesData[role].state = "未接続";
-                        }
-                    }
-                    updateUI();
-                });
-
-                database.ref('visitorTrigger').on('value', (snapshot) => {
-                    const data = snapshot.val();
-                    if (data && data.time) {
-                        const age = getServerTime() - data.time;
-                        if (age < 5000) {
-                            showVisitorBanner();
-                            changeEasterEgg(); 
-                        }
-                    }
-                });
-
-                database.ref('approachSignal').on('value', (snapshot) => {
-                    approachSignalState = snapshot.val() || false;
-                    updateUI();
-                });
-
-                isFirstLoad = false;
-            } else {
-                updateUI();
-            }
-        }
+        let statusRef = null;
+        let sessionRef = null;
+        let guideEventRef = null;
+        let startEventRef = null;
+        let placesRef = null;
+        let approachStateRef = null;
 
         function openSetup() {
-            document.getElementById("screen-setup").classList.add("active");
+            document.getElementById('screen-setup').style.display = 'flex';
+            document.getElementById('btn-cancel-setup').style.display = currentRole ? 'block' : 'none';
         }
 
         function cancelSetup() {
-            document.getElementById("screen-setup").classList.remove("active");
+            document.getElementById('screen-setup').style.display = 'none';
         }
 
-        function showVisitorBanner() {
-            const banner = document.getElementById("visitor-banner");
-            banner.classList.add("active");
-            setTimeout(() => { banner.classList.remove("active"); }, 3000);
-        }
-
-        function setupAdminScreen() {
-            const actionSpace = document.getElementById("header-action-space");
-            if (currentRole === "受付") {
-                actionSpace.innerHTML = '<button class="btn-action-header" onclick="triggerVisitor()">来客を通知する</button>';
-            } else if (currentRole === "スタート") {
-                actionSpace.innerHTML = '<button class="btn-action-header" onclick="triggerStart()">スタート</button>';
-            } else {
-                actionSpace.innerHTML = '';
-            }
-
-            const grid = document.getElementById("admin-grid-container");
-            grid.innerHTML = "";
-            const targets = ["場所1", "場所2", "場所3", "場所4", "出発信号", "接近"];
+        async function startApp() {
+            const select = document.getElementById('role-select');
+            const selectedRole = select.value;
             
-            targets.forEach(role => {
-                const cell = document.createElement("div");
-                cell.className = "status-cell";
-                cell.id = `admin-cell-${role}`;
-                
-                cell.innerHTML = `
-                    <div class="cell-header">
-                        ${role}
-                        <span id="admin-batt-${role}" class="battery-badge">--%</span>
-                    </div>
-                    <div class="cell-body" id="admin-body-${role}">未接続</div>
-                `;
-                grid.appendChild(cell);
-            });
-        }
-
-        function setupClientScreen() {
-            const actionSpace = document.getElementById("header-action-space");
-            actionSpace.innerHTML = '';
-            updateStatus('準備中');
-        }
-
-        function setupSignalScreen() {
-            const actionSpace = document.getElementById("header-action-space");
-            actionSpace.innerHTML = '';
-        }
-
-        function setupManagerScreen() {
-            const actionSpace = document.getElementById("header-action-space");
-            actionSpace.innerHTML = '';
-            const evictTargets = ["場所1", "場所2", "場所3", "場所4"];
-            evictTargets.forEach(role => {
-                const td = document.getElementById(`mgr-action-${role}`);
-                if(td) td.innerHTML = `<button class="btn-evict" onclick="evictRole('${role}')">追放(切断)</button>`;
-            });
-        }
-
-        function triggerVisitor() {
-            if (confirm("来客を通知しますか？\n（画面に「来客」と表示され、接近ランプが消灯します）")) {
-                database.ref('visitorTrigger').set({ time: firebase.database.ServerValue.TIMESTAMP });
-                database.ref('approachSignal').set(false);
+            if (!selectedRole) {
+                alert("役割を選択してください！");
+                return;
             }
+
+            if (selectedRole === '管理者') {
+                const inputPwd = prompt("管理者パスワードを入力してください:");
+                if (!inputPwd) return;
+                const inputHash = await sha256(inputPwd);
+                if (inputHash !== MANAGER_PASSWORD_HASH) {
+                    alert("パスワードが誤っています。");
+                    return;
+                }
+            }
+
+            if (!database) {
+                currentRole = selectedRole;
+                proceedToMainScreen();
+                return;
+            }
+
+            const newSessionId = Math.random().toString(36).substring(2, 15);
+
+            if (selectedRole !== '受付' && selectedRole !== '管理者') {
+                database.ref('places/' + selectedRole).once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    
+                    if (data && isDeviceConnected(data) && selectedRole !== currentRole) {
+                        if (!confirm(`${selectedRole} はすでに他の端末で使用されています。\n強制的にこの端末に切り替えますか？`)) return;
+                    }
+                    
+                    clearListeners();
+                    currentRole = selectedRole;
+                    mySessionId = newSessionId;
+                    
+                    let initData = { 
+                        session: mySessionId,
+                        lastSeen: firebase.database.ServerValue.TIMESTAMP
+                    };
+                    if (systemBattery !== null) initData.battery = systemBattery;
+
+                    if (['スタート', '場所1', '場所2', '場所3', '場所4'].includes(currentRole)) {
+                        initData.status = '準備中';
+                    }
+
+                    database.ref('places/' + currentRole).update(initData).then(() => {
+                        database.ref('places/' + currentRole + '/session').onDisconnect().remove();
+                        if (initData.status) database.ref('places/' + currentRole + '/status').onDisconnect().remove();
+                        proceedToMainScreen();
+                    });
+                });
+            } else {
+                clearListeners();
+                currentRole = selectedRole;
+                proceedToMainScreen();
+            }
+        }
+
+        function proceedToMainScreen() {
+            document.getElementById('screen-setup').style.display = 'none';
+            document.getElementById('app-header').style.display = 'flex';
+            document.getElementById('header-role-name').textContent = currentRole;
+            
+            document.querySelectorAll('.screen:not(#screen-setup)').forEach(s => s.classList.remove('active'));
+
+            const headerSpace = document.getElementById('header-action-space');
+            headerSpace.innerHTML = '';
+
+            startHeartbeat();
+
+            if (currentRole === '受付') {
+                document.getElementById('screen-admin').classList.add('active');
+                headerSpace.innerHTML = '<button class="btn-action-header" onclick="triggerGuide()">案内</button>';
+                renderAdminGrid(['スタート', '場所1', '場所2', '場所3', '場所4']);
+                setupAdminOrManager();
+            } else if (currentRole === 'スタート') {
+                document.getElementById('screen-admin').classList.add('active');
+                document.getElementById('screen-client').classList.add('active');
+                headerSpace.innerHTML = '<button class="btn-action-header" onclick="triggerStart()">スタート</button>';
+                renderAdminGrid(['場所1', '場所2', '場所3', '場所4']);
+                setupClient();
+                setupAdminOrManager();
+            } else if (['場所1', '場所2', '場所3', '場所4'].includes(currentRole)) {
+                document.getElementById('screen-client').classList.add('active');
+                setupClient();
+            } else if (currentRole === '出発信号' || currentRole === '接近') {
+                document.getElementById('screen-signal').classList.add('active');
+                setupSignal();
+            } else if (currentRole === '管理者') {
+                document.getElementById('screen-manager').classList.add('active');
+                setupAdminOrManager();
+            }
+        }
+
+        function clearListeners() {
+            stopHeartbeat();
+            if (statusRef) { statusRef.off(); statusRef = null; }
+            if (sessionRef) { sessionRef.off(); sessionRef = null; }
+            if (guideEventRef) { guideEventRef.off(); guideEventRef = null; }
+            if (startEventRef) { startEventRef.off(); startEventRef = null; }
+            if (placesRef) { placesRef.off(); placesRef = null; }
+            if (approachStateRef) { approachStateRef.off(); approachStateRef = null; }
+        }
+
+        function startHeartbeat() {
+            stopHeartbeat();
+            if (!database || !currentRole || currentRole === '管理者' || currentRole === '受付') return;
+
+            sendHeartbeat();
+            heartbeatInterval = setInterval(sendHeartbeat, 2000); 
+        }
+
+        function sendHeartbeat() {
+            if (!database || !currentRole) return;
+            const payload = { lastSeen: firebase.database.ServerValue.TIMESTAMP };
+            if (systemBattery !== null) payload.battery = systemBattery;
+            database.ref(`places/${currentRole}`).update(payload);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        function isDeviceConnected(placeData) {
+            if (!placeData || !placeData.session || !placeData.lastSeen) return false;
+            const estimatedServerNow = Date.now() + serverTimeOffset;
+            const diff = estimatedServerNow - placeData.lastSeen;
+            return diff < 5000;
+        }
+
+        function hasEmergencyStatus(places) {
+            if (!places) return false;
+            const targetPlaces = ['場所1', '場所2', '場所3', '場所4'];
+            return targetPlaces.some(p => isDeviceConnected(places[p]) && places[p].status === '非常');
+        }
+
+        function renderAdminGrid(keys) {
+            const container = document.getElementById('admin-grid-container');
+            container.innerHTML = '';
+            
+            container.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            container.style.gridTemplateRows = 'repeat(2, 1fr)';
+
+            keys.forEach(key => {
+                const isStart = (key === 'スタート');
+                const borderClass = (currentRole === '受付' && isStart) ? 'border-red' : '';
+                const html = `
+                    <div class="status-cell ${borderClass}" id="cell-${key}">
+                        <div class="cell-header">
+                            ${key}
+                            <div class="battery-badge" id="batt-${key}"></div>
+                        </div>
+                        <div class="cell-body status-unconnected" id="text-${key}">未接続</div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+
+            if (currentRole === '受付') {
+                container.innerHTML += `
+                    <div class="status-cell" style="display: flex; flex-direction: row;">
+                        <div style="flex: 1; border-right: 3px solid #333; display: flex; flex-direction: column;">
+                            <div class="cell-header" style="font-size: 16px;">
+                                出発信号
+                                <div class="battery-badge" id="batt-出発信号" style="right: 4px; padding: 1px 4px; font-size: 12px;"></div>
+                            </div>
+                            <div class="cell-body status-unconnected" id="text-出発信号" style="font-size: 26px;">未接続</div>
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column;">
+                            <div class="cell-header" style="font-size: 16px;">
+                                接近
+                                <div class="battery-badge" id="batt-接近" style="right: 4px; padding: 1px 4px; font-size: 12px;"></div>
+                            </div>
+                            <div class="cell-body status-unconnected" id="text-接近" style="font-size: 26px;">未接続</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function updateBatteryDisplay(elementId, placeData) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            if (isDeviceConnected(placeData) && placeData.battery !== undefined) {
+                el.textContent = placeData.battery + '%';
+                el.style.display = 'block';
+                if (placeData.battery <= 20) {
+                    el.classList.add('battery-low');
+                } else {
+                    el.classList.remove('battery-low');
+                }
+            } else {
+                el.style.display = 'none';
+            }
+        }
+
+        function getManagerStatusBadge(status) {
+            if (status === '準備中') return '<span class="mgr-badge mgr-badge-preparing">準備中</span>';
+            if (status === '準備完了') return '<span class="mgr-badge mgr-badge-ready">準備完了</span>';
+            if (status === '非常') return '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+            return '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
+        }
+
+        function setupAdminOrManager() {
+            if (!database) return;
+            statusRef = database.ref();
+            statusRef.on('value', snapshot => {
+                const val = snapshot.val() || {};
+                const places = val.places || {};
+                allPlacesData = places;
+
+                const isEmergency = hasEmergencyStatus(places);
+                const depSignal = checkDepartureSignal(places);
+                const approachSignal = (val.approachState === 'active');
+
+                ['スタート', '場所1', '場所2', '場所3', '場所4'].forEach(key => {
+                    const cellBody = document.getElementById('text-' + key);
+                    if (cellBody) {
+                        const isConnected = isDeviceConnected(places[key]);
+                        const status = isConnected ? places[key].status : '未接続';
+                        cellBody.textContent = status;
+                        cellBody.className = 'cell-body';
+                        if (status === '未接続') cellBody.classList.add('status-unconnected');
+                        else if (status === '準備中') cellBody.classList.add('status-preparing');
+                        else if (status === '準備完了') cellBody.classList.add('status-ready');
+                        else if (status === '非常') cellBody.classList.add('status-emergency');
+                    }
+                    updateBatteryDisplay('batt-' + key, places[key]);
+                });
+
+                if (currentRole === '受付') {
+                    const updateSignalCell = (key, isConn, isOn) => {
+                        const el = document.getElementById('text-' + key);
+                        if (!el) return;
+                        el.className = 'cell-body';
+                        if (!isConn) {
+                            el.textContent = '未接続';
+                            el.classList.add('status-unconnected');
+                        } else if (isEmergency) {
+                            el.textContent = '非常';
+                            el.classList.add('status-emergency');
+                        } else if (isOn) {
+                            el.textContent = '点灯';
+                            el.classList.add('status-light-on');
+                        } else {
+                            el.textContent = '消灯';
+                            el.classList.add('status-light-off');
+                        }
+                    };
+                    
+                    updateSignalCell('出発信号', isDeviceConnected(places['出発信号']), depSignal);
+                    updateSignalCell('接近', isDeviceConnected(places['接近']), approachSignal);
+                    updateBatteryDisplay('batt-出発信号', places['出発信号']);
+                    updateBatteryDisplay('batt-接近', places['接近']);
+                }
+
+                if (currentRole === '管理者') {
+                    const mgrGuide = document.getElementById('mgr-受付');
+                    mgrGuide.innerHTML = (val.guideState === 'active') ? '<span class="badge-blue">案内</span>' : '';
+
+                    const mgrStart = document.getElementById('mgr-スタート');
+                    if (val.startState === 'active') {
+                        mgrStart.innerHTML = '<span class="badge-blue">スタート</span>';
+                    } else {
+                        const isConnected = isDeviceConnected(places['スタート']);
+                        const st = isConnected ? places['スタート'].status : '未接続';
+                        mgrStart.innerHTML = getManagerStatusBadge(st);
+                    }
+
+                    // 場所1〜4の状況と「追放」ボタンの更新
+                    ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
+                        const isConnected = isDeviceConnected(places[p]);
+                        const st = isConnected ? places[p].status : '未接続';
+                        document.getElementById('mgr-' + p).innerHTML = getManagerStatusBadge(st);
+                        
+                        const actionTd = document.getElementById('mgr-action-' + p);
+                        if (actionTd) {
+                            // 未接続の場合はボタンをグレーアウト（無効化）する
+                            const disabledAttr = !isConnected ? 'disabled' : '';
+                            actionTd.innerHTML = `<button class="btn-evict" onclick="evictPlace('${p}')" ${disabledAttr}>追放</button>`;
+                        }
+                    });
+
+                    const mgrDep = document.getElementById('mgr-出発信号');
+                    if (!isDeviceConnected(places['出発信号'])) {
+                        mgrDep.innerHTML = '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
+                    } else if (isEmergency) {
+                        mgrDep.innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+                    } else {
+                        mgrDep.innerHTML = depSignal ? '<span class="box-light-on">点灯</span>' : '<span class="box-light-off">消灯</span>';
+                    }
+
+                    const mgrApp = document.getElementById('mgr-接近');
+                    if (!isDeviceConnected(places['接近'])) {
+                        mgrApp.innerHTML = '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
+                    } else if (isEmergency) {
+                        mgrApp.innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
+                    } else {
+                        mgrApp.innerHTML = approachSignal ? '<span class="box-light-on">点灯</span>' : '<span class="box-light-off">消灯</span>';
+                    }
+
+                    ['スタート', '場所1', '場所2', '場所3', '場所4', '出発信号', '接近'].forEach(r => {
+                        const battTd = document.getElementById('mgr-batt-' + r);
+                        if (battTd) {
+                            if (isDeviceConnected(places[r]) && places[r].battery !== undefined) {
+                                const lowClass = (places[r].battery <= 20) ? ' battery-low' : '';
+                                battTd.innerHTML = `<span class="mgr-battery-badge${lowClass}">${places[r].battery}%</span>`;
+                            } else {
+                                battTd.innerHTML = '<span style="color:#666;">-</span>';
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        function checkDepartureSignal(places) {
+            const targetPlaces = ['場所1', '場所2', '場所3', '場所4'];
+            let connectedCount = 0;
+            let readyCount = 0;
+
+            targetPlaces.forEach(p => {
+                if (isDeviceConnected(places[p])) {
+                    connectedCount++;
+                    if (places[p].status === '準備完了') readyCount++;
+                }
+            });
+
+            return (connectedCount > 0 && connectedCount === readyCount);
+        }
+
+        function triggerGuide() {
+            const startData = allPlacesData['スタート'];
+            const startStatus = isDeviceConnected(startData) ? startData.status : '未接続';
+
+            if (startStatus === '準備中') {
+                if (!confirm("スタート地点が準備中です。よろしいですか。")) return;
+            } else if (startStatus === '非常') {
+                if (!confirm("スタート地点が非常です。本当によろしいですか。")) return;
+            }
+
+            if (!database) return;
+            database.ref().update({
+                'guideEvent': firebase.database.ServerValue.TIMESTAMP,
+                'guideState': 'active',
+                'approachState': 'off'
+            });
         }
 
         function triggerStart() {
-            if (confirm("スタートしますか？\n（接近ランプが点灯し、場所1〜4は準備中に戻ります）")) {
-                database.ref('approachSignal').set(true);
+            let hasPreparing = false;
+            let hasEmergency = false;
 
-                const updates = {};
-                ["場所1", "場所2", "場所3", "場所4"].forEach(role => {
-                    if (allPlacesData[role] && allPlacesData[role].state !== "未接続") {
-                        updates[`status/${role}/state`] = "準備中";
-                    }
-                });
-                database.ref().update(updates);
-            }
-        }
-
-        function updateStatus(newState) {
-            if (currentRole && !EXCLUDED_ROLES.includes(currentRole)) {
-                database.ref(`status/${currentRole}/state`).set(newState);
-            }
-        }
-
-        function evictRole(role) {
-            if (confirm(`本当に「${role}」をシステムから追放（強制切断）しますか？`)) {
-                database.ref(`status/${role}`).remove();
-            }
-        }
-
-        function updateUI() {
-            if (currentRole === "受付" || currentRole === "スタート") {
-                const targets = ["場所1", "場所2", "場所3", "場所4"];
-                let isEmergency = false;
-                let isAllReady = true;
-                let connectedCount = 0; // ★接続されている端末の数をカウント
-
-                targets.forEach(role => {
-                    const data = allPlacesData[role] || {};
-                    const state = data.state || "未接続";
-                    const battery = data.battery;
-                    const cell = document.getElementById(`admin-cell-${role}`);
-                    const body = document.getElementById(`admin-body-${role}`);
-                    const battBadge = document.getElementById(`admin-batt-${role}`);
-                    
-                    if (state !== "未接続") {
-                        connectedCount++; // 未接続以外ならカウントアップ
-                    }
-
-                    if (cell && body) {
-                        cell.className = "status-cell";
-                        body.innerText = state;
-
-                        if (state === "非常") {
-                            cell.classList.add("status-emergency", "border-red");
-                            isEmergency = true;
-                            isAllReady = false;
-                        } else if (state === "準備中") {
-                            body.className = "cell-body status-preparing";
-                            isAllReady = false;
-                        } else if (state === "準備完了") {
-                            body.className = "cell-body status-ready";
-                        } else {
-                            body.className = "cell-body status-unconnected";
-                            // ★未接続の場合は isAllReady を false にしない（無視する）
-                        }
-
-                        if (battBadge) {
-                            if (battery !== undefined && state !== "未接続") {
-                                battBadge.style.display = "block";
-                                battBadge.innerText = `${battery}%`;
-                                if (battery <= 20) battBadge.classList.add("battery-low");
-                                else battBadge.classList.remove("battery-low");
-                            } else {
-                                battBadge.style.display = "none";
-                            }
-                        }
-                    }
-                });
-
-                // ★全ての場所が未接続の場合は、誤作動防止で光らせない
-                if (connectedCount === 0) {
-                    isAllReady = false;
+            ['場所1', '場所2', '場所3', '場所4'].forEach(p => {
+                if (isDeviceConnected(allPlacesData[p])) {
+                    if (allPlacesData[p].status === '準備中') hasPreparing = true;
+                    if (allPlacesData[p].status === '非常') hasEmergency = true;
                 }
+            });
 
-                // 出発信号・接近の表示更新
-                ["出発信号", "接近"].forEach(role => {
-                    const data = allPlacesData[role] || {};
-                    const isConnected = data.state !== "未接続" && data.lastSeen;
-                    const battery = data.battery;
-                    const cell = document.getElementById(`admin-cell-${role}`);
-                    const body = document.getElementById(`admin-body-${role}`);
-                    const battBadge = document.getElementById(`admin-batt-${role}`);
-                    
-                    if (cell && body) {
-                        cell.className = "status-cell";
-                        
-                        if (isConnected) {
-                            if (isEmergency) {
-                                body.className = "cell-body status-emergency";
-                                cell.classList.add("border-red");
-                                body.innerText = "非常（点滅）";
-                            } else {
-                                let isLightOn = false;
-                                if (role === "出発信号") isLightOn = isAllReady; 
-                                else if (role === "接近") isLightOn = approachSignalState;
+            if (hasEmergency) {
+                if (!confirm("非常の場所があります。よろしいですか。")) return;
+            } else if (hasPreparing) {
+                if (!confirm("準備中の場所があります。よろしいですか。")) return;
+            }
 
-                                if (isLightOn) {
-                                    body.className = "cell-body status-light-on";
-                                    body.innerText = "点灯" + (role === "出発信号" ? "（準備完了）" : "（接近中）");
-                                } else {
-                                    body.className = "cell-body status-light-off";
-                                    body.innerText = "消灯（待機）";
-                                }
-                            }
-                        } else {
-                            body.className = "cell-body status-unconnected";
-                            body.innerText = "未接続";
-                        }
+            if (!database) return;
+            database.ref().update({
+                'startEvent': firebase.database.ServerValue.TIMESTAMP,
+                'startState': 'active',
+                'approachState': 'active',
+                'guideState': 'off'
+            });
+        }
 
-                        if (battBadge) {
-                            if (battery !== undefined && isConnected) {
-                                battBadge.style.display = "block";
-                                battBadge.innerText = `${battery}%`;
-                                if (battery <= 20) battBadge.classList.add("battery-low");
-                                else battBadge.classList.remove("battery-low");
-                            } else {
-                                battBadge.style.display = "none";
-                            }
-                        }
-                    }
-                });
-            } 
-            else if (currentRole === "出発信号" || currentRole === "接近") {
-                const targets = ["場所1", "場所2", "場所3", "場所4"];
-                let isEmergency = false;
-                let isAllReady = true;
-                let connectedCount = 0; // ★
+        // --- 管理者からの強制追放処理 ---
+        function evictPlace(role) {
+            if (!confirm(`${role} を追放（強制切断）しますか？\n対象の端末は強制的に初期画面に戻ります。`)) return;
+            if (database) {
+                // Firebaseからその場所のデータを丸ごと削除
+                database.ref('places/' + role).remove();
+            }
+        }
 
-                targets.forEach(role => {
-                    const data = allPlacesData[role] || {};
-                    const state = data.state || "未接続";
-                    
-                    if (state === "非常") isEmergency = true;
-                    
-                    if (state !== "未接続") {
-                        connectedCount++;
-                        if (state !== "準備完了") {
-                            isAllReady = false;
-                        }
-                    }
-                });
+        function setupClient() {
+            if (!database) return;
+            isFirstLoad = true;
 
-                // ★全ての場所が未接続の場合は光らせない
-                if (connectedCount === 0) {
-                    isAllReady = false;
-                }
+            statusRef = database.ref(`places/${currentRole}/status`);
+            statusRef.on('value', snapshot => {
+                const status = snapshot.val() || '準備中';
+                document.querySelectorAll('.client-btn').forEach(b => b.classList.remove('active'));
+                if (status === '準備中') document.getElementById('btn-status-preparing').classList.add('active');
+                else if (status === '準備完了') document.getElementById('btn-status-ready').classList.add('active');
+                else if (status === '非常') document.getElementById('btn-status-emergency').classList.add('active');
+            });
 
-                const signalScreen = document.getElementById("screen-signal");
-                signalScreen.className = "screen active";
+            sessionRef = database.ref(`places/${currentRole}/session`);
+            sessionRef.on('value', snapshot => {
+                const sId = snapshot.val();
                 
-                if (isEmergency) {
-                    signalScreen.classList.add("emergency-blink");
-                } else {
-                    let isLightOn = false;
-                    if (currentRole === "出発信号") isLightOn = isAllReady;
-                    if (currentRole === "接近") isLightOn = approachSignalState;
-
-                    if (isLightOn) signalScreen.classList.add("light-on");
+                // 自分のセッションIDと異なる場合（別の人が上書きした or 管理者が削除してnullになった場合）
+                if (sId !== mySessionId) {
+                    alert("管理者から追放されたか、別の端末がこの役割を選択したため、切断されました。");
+                    currentRole = null;
+                    stopHeartbeat();
+                    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                    document.getElementById('app-header').style.display = 'none';
+                    openSetup();
                 }
-            } 
-            else if (currentRole === "管理者") {
-                const allRoles = ["受付", "スタート", "場所1", "場所2", "場所3", "場所4", "出発信号", "接近"];
-                let isEmergency = false;
-                let isAllReady = true;
-                let connectedCount = 0; // ★
+            });
 
-                // ★出発信号の表示を更新する前に、場所1〜4の状態だけを先に計算する
-                ["場所1", "場所2", "場所3", "場所4"].forEach(role => {
-                    const data = allPlacesData[role] || {};
-                    const isConnected = data.lastSeen && (getServerTime() - data.lastSeen <= 20000);
-                    const state = isConnected ? (data.state || "接続中") : "未接続";
-                    
-                    if (state === "非常") isEmergency = true;
-                    
-                    if (state !== "未接続") {
-                        connectedCount++;
-                        if (state !== "準備完了") {
-                            isAllReady = false;
-                        }
-                    }
-                });
-                
-                // ★全ての場所が未接続の場合は光らせない
-                if (connectedCount === 0) {
-                    isAllReady = false;
-                }
-
-                // UI全体に適用する
-                allRoles.forEach(role => {
-                    const data = allPlacesData[role] || {};
-                    const isConnected = data.lastSeen && (getServerTime() - data.lastSeen <= 20000);
-                    const state = isConnected ? (data.state || "接続中") : "未接続";
-                    const battery = data.battery;
-
-                    const td = document.getElementById(`mgr-${role}`);
-                    const battTd = document.getElementById(`mgr-batt-${role}`);
-
-                    if (td) {
-                        if (["出発信号", "接近"].includes(role)) {
-                            if (!isConnected) {
-                                td.innerHTML = '<span class="box-light-off" style="width:80%; margin:0 auto;">未接続</span>';
-                            } else if (isEmergency) {
-                                td.innerHTML = '<span class="box-light-on" style="background-color:#ff0000; border-color:#ff0000; color:#fff; width:80%; margin:0 auto; animation:urgent-blink 0.8s infinite steps(1);">非常</span>';
-                            } else {
-                                let isLightOn = false;
-                                if (role === "出発信号") isLightOn = isAllReady;
-                                if (role === "接近") isLightOn = approachSignalState;
-
-                                if (isLightOn) {
-                                    td.innerHTML = '<span class="box-light-on" style="width:80%; margin:0 auto;">点灯</span>';
-                                } else {
-                                    td.innerHTML = '<span class="box-light-off" style="width:80%; margin:0 auto;">消灯</span>';
-                                }
-                            }
-                        } else {
-                            if (state === "未接続") {
-                                td.innerHTML = '<span class="mgr-badge mgr-badge-unconnected">未接続</span>';
-                            } else if (state === "非常") {
-                                td.innerHTML = '<span class="mgr-badge mgr-badge-emergency">非常</span>';
-                            } else if (state === "準備完了") {
-                                td.innerHTML = '<span class="mgr-badge mgr-badge-ready">準備完了</span>';
-                            } else if (state === "準備中") {
-                                td.innerHTML = '<span class="mgr-badge mgr-badge-preparing">準備中</span>';
-                            } else {
-                                td.innerHTML = '<span class="badge-blue">接続中</span>';
-                            }
-                        }
-                    }
-
-                    if (battTd) {
-                        if (isConnected && battery !== undefined) {
-                            const lowClass = battery <= 20 ? "battery-low" : "";
-                            battTd.innerHTML = `<span class="mgr-battery-badge ${lowClass}">${battery}%</span>`;
-                        } else {
-                            battTd.innerHTML = `<span style="color:#666;">-</span>`;
-                        }
-                    }
+            if (currentRole === 'スタート') {
+                guideEventRef = database.ref('guideEvent');
+                guideEventRef.on('value', snapshot => {
+                    if (isFirstLoad) return;
+                    showBanner('来客', 10000, null);
                 });
             }
-            else {
-                const myData = allPlacesData[currentRole] || {};
-                const myState = myData.state || "準備中";
 
-                document.getElementById("btn-status-preparing").classList.remove("active");
-                document.getElementById("btn-status-ready").classList.remove("active");
-                document.getElementById("btn-status-emergency").classList.remove("active");
+            startEventRef = database.ref('startEvent');
+            startEventRef.on('value', snapshot => {
+                if (isFirstLoad) { isFirstLoad = false; return; }
+                showBanner('スタート', 20000, () => {
+                    updateStatus('準備中');
+                    if (currentRole === 'スタート') {
+                        database.ref('startState').set('off');
+                    }
+                });
+            });
+        }
 
-                if (myState === "準備中") document.getElementById("btn-status-preparing").classList.add("active");
-                else if (myState === "準備完了") document.getElementById("btn-status-ready").classList.add("active");
-                else if (myState === "非常") document.getElementById("btn-status-emergency").classList.add("active");
+        function showBanner(text, durationMs, onComplete) {
+            const allowedRoles = ['スタート', '場所1', '場所2', '場所3', '場所4'];
+            if (!allowedRoles.includes(currentRole)) return;
+
+            const banner = document.getElementById('visitor-banner');
+            banner.textContent = text;
+            banner.classList.add('active');
+            
+            setTimeout(() => {
+                banner.classList.remove('active');
+                if (onComplete) onComplete();
+            }, durationMs);
+        }
+
+        function updateStatus(newStatus) {
+            if (!database || !currentRole) return;
+            database.ref(`places/${currentRole}`).update({ status: newStatus });
+        }
+
+        function setupSignal() {
+            if (!database) return;
+            const signalScreen = document.getElementById('screen-signal');
+
+            if (currentRole === '出発信号') {
+                placesRef = database.ref('places');
+                placesRef.on('value', snapshot => {
+                    const places = snapshot.val() || {};
+                    const isEmergency = hasEmergencyStatus(places);
+
+                    if (isEmergency) {
+                        signalScreen.classList.remove('light-on');
+                        signalScreen.classList.add('emergency-blink');
+                    } else {
+                        signalScreen.classList.remove('emergency-blink');
+                        const isLightOn = checkDepartureSignal(places);
+                        if (isLightOn) signalScreen.classList.add('light-on');
+                        else signalScreen.classList.remove('light-on');
+                    }
+                });
+            } else if (currentRole === '接近') {
+                statusRef = database.ref();
+                statusRef.on('value', snapshot => {
+                    const val = snapshot.val() || {};
+                    const places = val.places || {};
+                    const approachState = val.approachState;
+                    const isEmergency = hasEmergencyStatus(places);
+
+                    if (isEmergency) {
+                        signalScreen.classList.remove('light-on');
+                        signalScreen.classList.add('emergency-blink');
+                    } else {
+                        signalScreen.classList.remove('emergency-blink');
+                        if (approachState === 'active') signalScreen.classList.add('light-on');
+                        else signalScreen.classList.remove('light-on');
+                    }
+                });
             }
         }
 
-        window.onload = () => { initBatteryStatus(); };
-        window.addEventListener('beforeunload', () => {
-            if (currentRole && mySessionId) database.ref(`status/${currentRole}`).remove();
+        const konamiCode = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
+        let konamiIndex = 0;
+        let konamiTimer = null;
+        let isEasterEggPlaying = false; 
+
+        document.addEventListener('keydown', (e) => {
+            if (currentRole !== '管理者' && currentRole !== '受付') {
+                konamiIndex = 0;
+                return;
+            }
+            
+            if (isEasterEggPlaying) return;
+
+            const key = e.key.toLowerCase();
+            
+            if (key === konamiCode[konamiIndex]) {
+                if (konamiIndex === 0) {
+                    clearTimeout(konamiTimer);
+                    konamiTimer = setTimeout(() => {
+                        konamiIndex = 0;
+                    }, 5000);
+                }
+                
+                konamiIndex++;
+                
+                if (konamiIndex === konamiCode.length) {
+                    clearTimeout(konamiTimer);
+                    konamiIndex = 0;
+                    triggerEasterEgg();
+                }
+            } else {
+                konamiIndex = 0;
+                clearTimeout(konamiTimer);
+                
+                if (key === konamiCode[0]) {
+                    konamiIndex = 1;
+                    konamiTimer = setTimeout(() => {
+                        konamiIndex = 0;
+                    }, 5000);
+                }
+            }
         });
+
+        function triggerEasterEgg() {
+            isEasterEggPlaying = true;
+            
+            const characters = [
+                'Images/Character1.png', 
+                'Images/Character2.png', 
+                'Images/Character3.png', 
+                'Images/Character4.png'
+            ];
+            const randomChar = characters[Math.floor(Math.random() * characters.length)];
+            const eggImg = document.getElementById('easter-egg-img');
+            
+            eggImg.onload = () => {
+                eggImg.style.top = '-15px';
+                
+                setTimeout(() => {
+                    eggImg.style.top = '-85px';
+                    
+                    setTimeout(() => {
+                        isEasterEggPlaying = false;
+                    }, 400);
+                    
+                }, 5000);
+                
+                eggImg.onload = null;
+            };
+            
+            eggImg.src = randomChar;
+        }
     </script>
 </body>
 </html>
